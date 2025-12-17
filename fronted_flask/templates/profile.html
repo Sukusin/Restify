@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">Профиль</h1>
+
+<div class="card p-3 mb-3">
+  <div class="text-muted small">/me</div>
+  <pre class="mb-0">{{ me | tojson(indent=2) }}</pre>
+</div>
+
+<form method="post" class="card p-3">
+  <label class="form-label">Предпочтительные категории (через запятую)</label>
+  <input class="form-control mb-3" name="preferred_categories" value="{{ preferred }}">
+  <button class="btn btn-primary">Сохранить</button>
+</form>
+{% endblock %}

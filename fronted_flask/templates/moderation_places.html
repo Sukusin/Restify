@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">Модерация: места (pending)</h1>
+
+<div class="list-group mb-3">
+  {% if items and items is iterable %}
+    {% for p in items %}
+      <div class="list-group-item">
+        <div class="fw-semibold">{{ p.get("name","(без названия)") }} <span class="text-muted">#{{ p.get("id") }}</span></div>
+        <div class="text-muted small">{{ p.get("city","") }} • {{ p.get("category","") }}</div>
+        <div class="d-flex gap-2 mt-2">
+          <form method="post" action="{{ url_for('moderation_places_action', place_id=p.get('id'), action='approve') }}">
+            <button class="btn btn-sm btn-success">Approve</button>
+          </form>
+          <form method="post" action="{{ url_for('moderation_places_action', place_id=p.get('id'), action='reject') }}">
+            <button class="btn btn-sm btn-danger">Reject</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="text-muted">Нет pending мест.</div>
+  {% endif %}
+</div>
+
+<a class="btn btn-outline-secondary" href="{{ url_for('moderation_reviews') }}">Перейти к отзывам</a>
+{% endblock %}

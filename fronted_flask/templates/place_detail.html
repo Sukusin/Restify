@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">Место #{{ place_id }}</h1>
+
+{% if detail_error %}
+  <div class="alert alert-warning">{{ detail_error }}</div>
+{% endif %}
+
+{% if place %}
+  <div class="card p-3 mb-3">
+    <div class="fw-semibold">{{ place.get("name","(без названия)") }}</div>
+    <div class="text-muted small">{{ place.get("city","") }} • {{ place.get("category","") }}</div>
+    {% if place.get("description") %}
+      <div class="mt-2">{{ place.get("description") }}</div>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="d-flex gap-2 mb-3">
+  <a class="btn btn-outline-secondary" href="{{ url_for('place_summary', place_id=place_id) }}">Summary отзывов (LLM)</a>
+</div>
+
+<h2 class="h6">Отзывы</h2>
+<div class="list-group mb-3">
+  {% if reviews and reviews is iterable %}
+    {% for r in reviews %}
+      <div class="list-group-item">
+        <div class="d-flex justify-content-between">
+          <div class="fw-semibold">★ {{ r.get("rating","—") }}</div>
+          <div class="text-muted small">{{ r.get("status","") }}</div>
+        </div>
+        <div>{{ r.get("text","") }}</div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="text-muted">Нет отзывов или backend не отдаёт список отзывов.</div>
+  {% endif %}
+</div>
+
+<h2 class="h6">Добавить отзыв</h2>
+<form method="post" class="card p-3">
+  <label class="form-label">Рейтинг</label>
+  <select class="form-select mb-2" name="rating">
+    {% for i in range(5,0,-1) %}
+      <option value="{{ i }}">{{ i }}</option>
+    {% endfor %}
+  </select>
+  <label class="form-label">Текст</label>
+  <textarea class="form-control mb-3" name="text" rows="3" required></textarea>
+  <button class="btn btn-primary">Отправить</button>
+</form>
+
+{% endblock %}

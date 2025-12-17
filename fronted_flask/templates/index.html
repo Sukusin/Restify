@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">Поиск мест</h1>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-4">
+    <input class="form-control" name="q" placeholder="поиск..." value="{{ q }}">
+  </div>
+  <div class="col-md-3">
+    <input class="form-control" name="city" placeholder="город" value="{{ city }}">
+  </div>
+  <div class="col-md-3">
+    <input class="form-control" name="category" placeholder="категория" value="{{ category }}">
+  </div>
+  <div class="col-md-2">
+    <input class="form-control" name="min_rating" placeholder="мин.рейтинг" value="{{ min_rating }}">
+  </div>
+  <div class="col-12">
+    <button class="btn btn-primary">Искать</button>
+  </div>
+</form>
+
+<div class="list-group">
+  {% if places and places is iterable %}
+    {% for p in places %}
+      <a class="list-group-item list-group-item-action" href="{{ url_for('place_detail', place_id=p.get('id', loop.index)) }}">
+        <div class="d-flex justify-content-between">
+          <div>
+            <div class="fw-semibold">{{ p.get("name","(без названия)") }}</div>
+            <div class="text-muted small">{{ p.get("city","") }} • {{ p.get("category","") }}</div>
+          </div>
+          <div class="text-muted">
+            ★ {{ p.get("rating", p.get("avg_rating","—")) }}
+          </div>
+        </div>
+      </a>
+    {% endfor %}
+  {% else %}
+    <div class="text-muted">Ничего не найдено.</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">Регистрация</h1>
+<form method="post" class="card p-3">
+  <label class="form-label">Email</label>
+  <input class="form-control mb-2" name="email" required>
+  <label class="form-label">Имя (опционально)</label>
+  <input class="form-control mb-2" name="full_name">
+  <label class="form-label">Пароль</label>
+  <input class="form-control mb-3" type="password" name="password" required>
+  <button class="btn btn-primary">Создать аккаунт</button>
+</form>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">Рекомендации</h1>
+<div class="list-group">
+  {% if recs and recs is iterable %}
+    {% for p in recs %}
+      <a class="list-group-item list-group-item-action" href="{{ url_for('place_detail', place_id=p.get('id', loop.index)) }}">
+        <div class="fw-semibold">{{ p.get("name","(без названия)") }}</div>
+        <div class="text-muted small">{{ p.get("city","") }} • {{ p.get("category","") }}</div>
+      </a>
+    {% endfor %}
+  {% else %}
+    <div class="text-muted">Пока пусто.</div>
+  {% endif %}
+</div>
+{% endblock %}

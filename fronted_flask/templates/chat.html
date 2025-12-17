@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4 mb-3">Чат</h1>
+
+<form method="post" class="card p-3 mb-3">
+  <label class="form-label">Сообщение</label>
+  <textarea class="form-control mb-3" name="message" rows="3" required></textarea>
+  <button class="btn btn-primary">Отправить</button>
+</form>
+
+{% if answer %}
+  <div class="card p-3 mb-3">
+    <div class="fw-semibold mb-2">Ответ</div>
+    <div style="white-space: pre-wrap;">{{ answer }}</div>
+  </div>
+{% endif %}
+
+{% if raw %}
+  <div class="card p-3">
+    <div class="text-muted small">Raw</div>
+    <pre class="mb-0">{{ raw | tojson(indent=2) }}</pre>
+  </div>
+{% endif %}
+{% endblock %}
