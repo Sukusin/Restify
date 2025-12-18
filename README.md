@@ -9,7 +9,7 @@
 - Модерация UGC (места и отзывы): `pending/approved/rejected`
 - Быстрый поиск/фильтрация мест по **категории/городу/рейтингу**
 - Рекомендации по предпочтительным категориям пользователя
-- Интеграция с **локальной бесплатной LLM** через **Ollama** (чат + суммаризация отзывов)
+- Интеграция с **локальной бесплатной LLM** через **Hugging Face Transformers** (чат + суммаризация отзывов)
 - Кэширование ответов LLM (TTL, in-memory)
 - Логирование (console + `logs/app.log`)
 - Заготовка модуля парсинга внешних источников (пока пустой)
@@ -32,37 +32,32 @@ uvicorn app.main:app --reload
 
 Swagger/OpenAPI: `http://127.0.0.1:8000/docs`
 
-### 3) Локальная LLM (Ollama)
+Минимальный веб-интерфейс (HTML/JS): `http://127.0.0.1:8000/ui/`
 
-1. Установите Ollama.
-2. Запустите сервер (обычно он стартует автоматически; иначе):
+### 3) Локальная LLM (Hugging Face)
 
-```bash
-ollama serve
-```
+По умолчанию используется небольшая бесплатная модель `Qwen/Qwen2.5-0.5B-Instruct`.
+Она будет скачана автоматически при первом обращении к `/chat` или `/places/{id}/reviews/summary`.
 
-3. Скачайте маленькую модель (пример):
-
-```bash
-ollama pull llama3.2:1b
-```
-
-По умолчанию приложение обращается к `http://localhost:11434`.
+Если хотите другую модель — поменяйте `HF_MODEL_ID` в `.env`.
 
 ### Переменные окружения
 
 - `DATABASE_URL` (по умолчанию: `sqlite:///./app.db`)
 - `APP_SECRET_KEY` (обязательно в проде)
-- `LLM_PROVIDER` = `ollama` или `disabled` (по умолчанию: `ollama`)
-- `OLLAMA_BASE_URL` (по умолчанию: `http://localhost:11434`)
-- `OLLAMA_MODEL` (по умолчанию: `llama3.2:1b`)
+- `LLM_PROVIDER` = `hf_local` или `disabled` (по умолчанию: `hf_local`)
+- `HF_MODEL_ID` (по умолчанию: `Qwen/Qwen2.5-0.5B-Instruct`)
+- `HF_DEVICE` = `auto` | `cpu` | `cuda` (по умолчанию: `auto`)
+- `HF_MAX_NEW_TOKENS` (по умолчанию: `256`)
+- `HF_TEMPERATURE` (по умолчанию: `0.7`)
+- `HF_TOP_P` (по умолчанию: `0.9`)
 
 Пример:
 
 ```bash
 export APP_SECRET_KEY='change-me'
-export LLM_PROVIDER='ollama'
-export OLLAMA_MODEL='llama3.2:1b'
+export LLM_PROVIDER='hf_local'
+export HF_MODEL_ID='Qwen/Qwen2.5-0.5B-Instruct'
 uvicorn app.main:app --reload
 ```
 
@@ -89,6 +84,11 @@ uvicorn app.main:app --reload
 
 - Таблицы БД: `users_auth`, `users_profile`, `places`, `reviews`.
 - Для простоты используется SQLite; можно заменить на Postgres через `DATABASE_URL`.
+
+### UI (статические файлы)
+
+Фронтенд лежит в `app/static/` и отдаётся FastAPI по пути `/ui/`.
+Также включён CORS (`allow_origins=['*']`) для удобного локального запуска (например, через Live Server).
 
 ### Как быстро получить модератора
 

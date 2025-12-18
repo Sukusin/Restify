@@ -15,10 +15,21 @@ class Settings(BaseSettings):
     app_secret_key: str = "dev-secret-change-me"
     access_token_exp_minutes: int = 60 * 24
 
-    # Local LLM
-    llm_provider: str = "ollama"  # ollama | disabled
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.2:1b"
+    # Local LLM (Hugging Face)
+    # Minimal local inference via Transformers.
+    # `hf_local`  - use a local Hugging Face model (downloaded on first run)
+    # `disabled`  - turn off LLM features
+    llm_provider: str = "hf_local"  # hf_local | disabled
+
+    # Default: small free model (Apache-2.0)
+    hf_model_id: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    # auto | cpu | cuda
+    hf_device: str = "auto"
+
+    # Generation params
+    hf_max_new_tokens: int = 256
+    hf_temperature: float = 0.7
+    hf_top_p: float = 0.9
 
     # Caching
     llm_cache_ttl_seconds: int = 60 * 10

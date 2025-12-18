@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Restify UI</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">R</div>
+      <div>
+        <div class="title">Restify UI</div>
+        <div class="subtitle">HTML фронтенд для FastAPI</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label class="field">
+        <span>Base URL</span>
+        <input id="baseUrl" type="text" placeholder="(пусто = тот же домен) например: http://127.0.0.1:8000" />
+      </label>
+      <button id="saveBaseUrl" class="btn">Сохранить</button>
+      <button id="clearAuth" class="btn btn-ghost" title="Удалить токен">Выйти</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <nav class="sidebar">
+      <button class="navitem active" data-tab="auth">Auth / Профиль</button>
+      <button class="navitem" data-tab="places">Места</button>
+      <button class="navitem" data-tab="recs">Рекомендации</button>
+      <button class="navitem" data-tab="chat">Чат</button>
+      <button class="navitem" data-tab="moderation">Модерация</button>
+      <button class="navitem" data-tab="explorer">API Explorer (OpenAPI)</button>
+      <div class="navhint">
+        <div><b>Токен:</b> <span id="tokenState">нет</span></div>
+        <div><b>Статус:</b> <span id="statusLine">—</span></div>
+      </div>
+    </nav>
+
+    <section class="content">
+      <!-- AUTH -->
+      <div class="tab active" id="tab-auth">
+        <h2>Auth / Профиль</h2>
+
+        <div class="grid2">
+          <div class="card">
+            <h3>Регистрация</h3>
+            <form id="registerForm" class="form">
+              <label class="field">
+                <span>Email</span>
+                <input name="email" type="email" required />
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input name="password" type="password" required />
+              </label>
+              <button class="btn" type="submit">POST /auth/register</button>
+            </form>
+            <pre class="out" id="registerOut"></pre>
+          </div>
+
+          <div class="card">
+            <h3>Логин (JWT)</h3>
+            <form id="loginForm" class="form">
+              <label class="field">
+                <span>Username / Email</span>
+                <input name="username" type="text" required />
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input name="password" type="password" required />
+              </label>
+              <button class="btn" type="submit">POST /auth/token</button>
+            </form>
+            <pre class="out" id="loginOut"></pre>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <h3>Я (проверка токена)</h3>
+            <div class="row">
+              <button id="meBtn" class="btn">GET /me</button>
+            </div>
+            <pre class="out" id="meOut"></pre>
+          </div>
+
+          <div class="card">
+            <h3>Профиль (предпочтительные категории)</h3>
+            <form id="profileForm" class="form">
+              <label class="field">
+                <span>Категории (через запятую)</span>
+                <input name="categories" type="text" placeholder="например: кино, кафе, прогулки" />
+              </label>
+              <button class="btn" type="submit">PUT /me/profile</button>
+            </form>
+            <pre class="out" id="profileOut"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLACES -->
+      <div class="tab" id="tab-places">
+        <h2>Места</h2>
+
+        <div class="grid2">
+          <div class="card">
+            <h3>Поиск / фильтры</h3>
+            <form id="placesSearchForm" class="form">
+              <label class="field">
+                <span>Query (q)</span>
+                <input name="q" type="text" placeholder="поиск по названию/описанию..." />
+              </label>
+              <label class="field">
+                <span>Город (city)</span>
+                <input name="city" type="text" />
+              </label>
+              <label class="field">
+                <span>Категория (category)</span>
+                <input name="category" type="text" />
+              </label>
+              <label class="field">
+                <span>Min rating (min_rating)</span>
+                <input name="min_rating" type="number" min="1" max="5" step="0.1" />
+              </label>
+              <button class="btn" type="submit">GET /places</button>
+            </form>
+            <pre class="out" id="placesOut"></pre>
+          </div>
+
+          <div class="card">
+            <h3>Создать место</h3>
+            <form id="createPlaceForm" class="form">
+              <label class="field">
+                <span>Название</span>
+                <input name="name" type="text" required />
+              </label>
+              <label class="field">
+                <span>Категория</span>
+                <input name="category" type="text" required />
+              </label>
+              <label class="field">
+                <span>Город</span>
+                <input name="city" type="text" required />
+              </label>
+              <label class="field">
+                <span>Описание</span>
+                <textarea name="description" rows="3"></textarea>
+              </label>
+              <button class="btn" type="submit">POST /places</button>
+            </form>
+            <pre class="out" id="createPlaceOut"></pre>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <h3>Добавить отзыв</h3>
+            <form id="addReviewForm" class="form">
+              <label class="field">
+                <span>Place ID</span>
+                <input name="place_id" type="number" min="1" required />
+              </label>
+              <label class="field">
+                <span>Рейтинг (1–5)</span>
+                <input name="rating" type="number" min="1" max="5" required />
+              </label>
+              <label class="field">
+                <span>Текст</span>
+                <textarea name="text" rows="3"></textarea>
+              </label>
+              <button class="btn" type="submit">POST /places/{id}/reviews</button>
+            </form>
+            <pre class="out" id="addReviewOut"></pre>
+          </div>
+
+          <div class="card">
+            <h3>Суммаризация отзывов (LLM)</h3>
+            <form id="summaryForm" class="form">
+              <label class="field">
+                <span>Place ID</span>
+                <input name="place_id" type="number" min="1" required />
+              </label>
+              <button class="btn" type="submit">GET /places/{id}/reviews/summary</button>
+            </form>
+            <pre class="out" id="summaryOut"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- RECS -->
+      <div class="tab" id="tab-recs">
+        <h2>Рекомендации</h2>
+        <div class="card">
+          <div class="row">
+            <button id="recsBtn" class="btn">GET /recommendations</button>
+          </div>
+          <pre class="out" id="recsOut"></pre>
+        </div>
+      </div>
+
+      <!-- CHAT -->
+      <div class="tab" id="tab-chat">
+        <h2>Чат</h2>
+        <div class="grid2">
+          <div class="card">
+            <h3>Сообщение</h3>
+            <form id="chatForm" class="form">
+              <label class="field">
+                <span>Текст</span>
+                <textarea name="message" rows="4" placeholder="куда сходить вечером?"></textarea>
+              </label>
+              <button class="btn" type="submit">POST /chat</button>
+            </form>
+            <pre class="out" id="chatOut"></pre>
+          </div>
+
+          <div class="card">
+            <h3>Advanced JSON (если нужно)</h3>
+            <p class="muted">
+              Если бэкенд ждёт другой формат тела запроса — отредактируй JSON ниже и отправь через Explorer вкладку.
+            </p>
+            <pre class="out">{ "message": "..." }</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODERATION -->
+      <div class="tab" id="tab-moderation">
+        <h2>Модерация</h2>
+
+        <div class="grid2">
+          <div class="card">
+            <h3>Pending places</h3>
+            <div class="row">
+              <button id="pendingPlacesBtn" class="btn">GET /moderation/places/pending</button>
+            </div>
+            <pre class="out" id="pendingPlacesOut"></pre>
+            <div class="divider"></div>
+            <form id="moderatePlaceForm" class="form">
+              <label class="field">
+                <span>Place ID</span>
+                <input name="place_id" type="number" min="1" required />
+              </label>
+              <div class="row">
+                <button class="btn" type="submit" data-action="approve">Approve</button>
+                <button class="btn btn-danger" type="submit" data-action="reject">Reject</button>
+              </div>
+            </form>
+            <pre class="out" id="moderatePlaceOut"></pre>
+          </div>
+
+          <div class="card">
+            <h3>Pending reviews</h3>
+            <div class="row">
+              <button id="pendingReviewsBtn" class="btn">GET /moderation/reviews/pending</button>
+            </div>
+            <pre class="out" id="pendingReviewsOut"></pre>
+            <div class="divider"></div>
+            <form id="moderateReviewForm" class="form">
+              <label class="field">
+                <span>Review ID</span>
+                <input name="review_id" type="number" min="1" required />
+              </label>
+              <div class="row">
+                <button class="btn" type="submit" data-action="approve">Approve</button>
+                <button class="btn btn-danger" type="submit" data-action="reject">Reject</button>
+              </div>
+            </form>
+            <pre class="out" id="moderateReviewOut"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- EXPLORER -->
+      <div class="tab" id="tab-explorer">
+        <h2>API Explorer (автогенерация из /openapi.json)</h2>
+
+        <div class="card">
+          <div class="row wrap">
+            <button id="loadOpenapiBtn" class="btn">Загрузить OpenAPI</button>
+            <label class="field small">
+              <span>Фильтр (path contains)</span>
+              <input id="filterOpenapi" type="text" placeholder="/places" />
+            </label>
+          </div>
+          <div id="openapiInfo" class="muted"></div>
+        </div>
+
+        <div id="openapiList" class="stack"></div>
+      </div>
+
+      <footer class="footer muted">
+        Подсказка: если UI открываешь не с бэкенда (например через Live Server), включи CORS в FastAPI.
+      </footer>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
