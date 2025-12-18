@@ -5,9 +5,10 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.logging_config import configure_logging
@@ -26,17 +27,13 @@ logger = logging.getLogger(__name__)
 def create_app() -> FastAPI:
     app = FastAPI(title="Leisure Recommender", version="0.1.0")
 
-    # ---------- CORS (нужно только если UI открываешь НЕ с бэкенда, например через Live Server) ----------
-    # Если всегда открываешь http://127.0.0.1:8000/ui/ — можешь удалить этот блок.
+    # CORS is enabled for simple local development scenarios:
+    # - serving UI separately (Live Server)
+    # - opening index.html from file://
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://127.0.0.1:5500",
-            "http://localhost:5500",
-            "http://127.0.0.1:8000",
-            "http://localhost:8000",
-        ],
-        allow_credentials=True,
+        allow_origins=["*"],
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -52,28 +49,13 @@ def create_app() -> FastAPI:
         start = time.time()
         try:
             response = await call_next(request)
-        except Exception:
+        except Exception as exc:
             logger.exception("Unhandled error")
             return JSONResponse(status_code=500, content={"detail": "Internal server error"})
         duration_ms = int((time.time() - start) * 1000)
         logger.info("%s %s -> %s (%sms)", request.method, request.url.path, response.status_code, duration_ms)
         return response
 
-    # ---------- Static UI ----------
-    # repo_root/app/main.py -> repo_root
-    repo_root = Path(__file__).resolve().parents[2]
-    ui_dir = repo_root / "frontend"
-
-    if ui_dir.exists():
-        app.mount("/ui", StaticFiles(directory=str(ui_dir), html=True), name="ui")
-
-        @app.get("/", include_in_schema=False)
-        def root() -> FileResponse:
-            return FileResponse(ui_dir / "index.html")
-    else:
-        logger.warning("UI directory not found: %s (skip mounting /ui)", ui_dir)
-
-    # ---------- API routers ----------
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(places.router)
@@ -81,6 +63,15 @@ def create_app() -> FastAPI:
     app.include_router(recommendations.router)
     app.include_router(chat.router)
     app.include_router(moderation.router)
+
+    # Serve the provided minimal HTML UI
+    static_dir = Path(__file__).resolve().parent / "static"
+    if static_dir.exists():
+        app.mount("/ui", StaticFiles(directory=str(static_dir), html=True), name="ui")
+
+        @app.get("/", include_in_schema=False)
+        def root_redirect() -> RedirectResponse:
+            return RedirectResponse(url="/ui/")
 
     return app
 

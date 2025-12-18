@@ -7,7 +7,12 @@ from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# NOTE:
+# We intentionally avoid bcrypt here because:
+# - bcrypt has a hard 72-byte password limit (can raise ValueError)
+# - bcrypt backend/version compatibility issues are common on Windows
+# For this MVP we use PBKDF2-SHA256 which is built into Passlib.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 ALGORITHM = "HS256"
 

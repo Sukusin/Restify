@@ -35,3 +35,4 @@ class UserProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user: Mapped[UserAuth] = relationship(back_populates="profile")
+
