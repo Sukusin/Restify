@@ -1,2 +1,19 @@
 2025-12-17 18:42:47 | INFO | app.main | DB ready
 2025-12-17 18:56:46 | INFO | app.main | DB ready
+2025-12-18 18:26:12 | INFO | app.main | DB ready
+2025-12-18 18:26:14 | INFO | app.main | GET / -> 307 (1ms)
+2025-12-18 18:26:14 | INFO | app.main | GET /ui/ -> 304 (31ms)
+2025-12-18 18:26:14 | INFO | app.main | GET /ui/styles.css -> 304 (1ms)
+2025-12-18 18:26:14 | INFO | app.main | GET /ui/app.js -> 304 (1ms)
+2025-12-18 18:26:14 | INFO | app.main | GET /favicon.ico -> 404 (0ms)
+2025-12-18 18:26:48 | INFO | app.main | POST /auth/token -> 401 (16ms)
+2025-12-18 18:26:56 | INFO | app.main | POST /auth/token -> 401 (1ms)
+2025-12-18 18:26:58 | INFO | app.main | POST /auth/token -> 401 (2ms)
+2025-12-18 18:27:22 | INFO | app.main | POST /auth/register -> 422 (8ms)
+2025-12-18 18:28:04 | INFO | app.main | POST /auth/register -> 201 (163ms)
+2025-12-18 18:28:15 | INFO | app.main | POST /auth/token -> 200 (10ms)
+2025-12-18 18:28:30 | INFO | app.services.llm | Loading HF model: Qwen/Qwen2.5-0.5B-Instruct (device=auto)
+2025-12-18 18:28:37 | INFO | app.services.llm | HF model ready: Qwen/Qwen2.5-0.5B-Instruct (cuda)
+2025-12-18 18:28:38 | INFO | app.main | POST /chat -> 200 (8152ms)
+2025-12-18 18:29:25 | INFO | app.main | POST /chat -> 200 (454ms)
+2025-12-18 18:30:24 | INFO | app.main | DB ready
