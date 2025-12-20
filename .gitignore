@@ -8,3 +8,6 @@ env/
 .env
 .env.*
 logs/
+app.db
+*.db
+sql.txt
