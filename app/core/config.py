@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
+import os
 
 
 class Settings(BaseSettings):
     """Application settings."""
+
+    load_dotenv()
 
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
 
@@ -12,19 +16,14 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./app.db"
 
     # Security
-    app_secret_key: str = "dev-secret-change-me"
     access_token_exp_minutes: int = 60 * 24
 
     # Local LLM (Hugging Face)
-    # Minimal local inference via Transformers.
-    # `hf_local`  - use a local Hugging Face model (downloaded on first run)
-    # `disabled`  - turn off LLM features
-    llm_provider: str = "hf_local"  # hf_local | disabled
+    llm_provider: str = os.getenv("LLM_PROVIDER")  # hf_local | disabled
 
-    # Default: small free model
-    hf_model_id: str = "Qwen/Qwen3-8B"
+    hf_model_id: str = os.getenv("HF_MODEL_ID")
     # auto | cpu | cuda
-    hf_device: str = "auto"
+    hf_device: str = os.getenv("HF_DEVICE")
 
     # Generation params
     hf_max_new_tokens: int = 256
@@ -37,6 +36,10 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
     log_dir: str = "./logs"
+
+    # Places parser
+    geoapify_url: str = "https://api.geoapify.com/v2/places"
+    geoapify_key: str = os.getenv("GEOAPIFY_KEY")
 
 
 settings = Settings()
