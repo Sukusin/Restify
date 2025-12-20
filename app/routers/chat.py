@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, func
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -25,6 +25,7 @@ def _build_system_prompt(*, profile: UserProfile | None, candidates: list[Place]
     lines = [
         "Ты — ассистент для подбора мест отдыха и развлечений.",
         "Отвечай по-русски, коротко и по делу.",
+        "Можно использовать Markdown (списки, выделение, ссылки). Не используй HTML.",
         "Если информации недостаточно — задай 1 уточняющий вопрос.",
     ]
 
@@ -54,13 +55,22 @@ async def chat(
 ) -> ChatResponse:
     profile = db.get(UserProfile, current.id)
 
+    # If user didn't provide explicit filters, use profile hints.
+    profile_categories = parse_categories(profile.preferred_categories) if profile else []
+
+    city = (payload.city or "").strip() or (profile.city if profile and profile.city else None)
+    if payload.category and payload.category.strip():
+        categories = [payload.category.strip()]
+    elif profile_categories:
+        categories = profile_categories
+    else:
+        categories = []
+
     stmt = select(Place)
-    if payload.category:
-        stmt = stmt.where(Place.category == payload.category.strip())
-    if payload.city:
-        stmt = stmt.where(Place.city == payload.city.strip())
-    elif profile and profile.city:
-        stmt = stmt.where(Place.city == profile.city)
+    if city:
+        stmt = stmt.where(func.lower(Place.city) == city.lower())
+    if categories:
+        stmt = stmt.where(func.lower(Place.category).in_([c.lower() for c in categories]))
     if payload.min_rating is not None:
         stmt = stmt.where(Place.avg_rating >= payload.min_rating)
 

@@ -17,6 +17,98 @@ function escapeHtml(s){
   }[c]));
 }
 
+// Safe Markdown-ish renderer (no raw HTML from the model).
+// Supports: fenced code blocks, inline code, bold/italic, links, lists, newlines.
+function renderMarkdownSafe(input){
+  const raw = String(input ?? "");
+
+  // 1) Extract fenced code blocks first.
+  const codeBlocks = [];
+  let tmp = raw.replace(/```([\w-]+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+    const i = codeBlocks.length;
+    codeBlocks.push({ lang: (lang || "").trim(), code: String(code || "") });
+    return `\u0000CODEBLOCK_${i}\u0000`;
+  });
+
+  // 2) Extract markdown links to safely validate URL scheme.
+  const links = [];
+  tmp = tmp.replace(/\[([^\]]+)]\(([^)]+)\)/g, (_, text, url) => {
+    const u = String(url || "").trim();
+    // Only allow http/https links.
+    if (!/^https?:\/\//i.test(u)) return `[${text}](${url})`;
+    const i = links.length;
+    links.push({ text: String(text || ""), url: u });
+    return `\u0000LINK_${i}\u0000`;
+  });
+
+  // 3) Escape everything (prevents XSS), then apply lightweight formatting.
+  let s = escapeHtml(tmp);
+
+  // Inline code
+  s = s.replace(/`([^`\n]+)`/g, (_, code) => `<code>${code}</code>`);
+
+  // Bold / italic (keep it simple)
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, (_, t) => `<strong>${t}</strong>`);
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, (_, pre, t) => `${pre}<em>${t}</em>`);
+
+  // Lists (unordered/ordered) line-based
+  const lines = s.split(/\n/);
+  let out = "";
+  let inUl = false;
+  let inOl = false;
+
+  const closeLists = () => {
+    if (inUl) { out += "</ul>"; inUl = false; }
+    if (inOl) { out += "</ol>"; inOl = false; }
+  };
+
+  for (const line of lines){
+    const ul = line.match(/^\s*[-*]\s+(.*)$/);
+    const ol = line.match(/^\s*(\d+)\.\s+(.*)$/);
+
+    if (ul){
+      if (inOl) { out += "</ol>"; inOl = false; }
+      if (!inUl) { out += "<ul>"; inUl = true; }
+      out += `<li>${ul[1]}</li>`;
+      continue;
+    }
+    if (ol){
+      if (inUl) { out += "</ul>"; inUl = false; }
+      if (!inOl) { out += "<ol>"; inOl = true; }
+      out += `<li>${ol[2]}</li>`;
+      continue;
+    }
+
+    closeLists();
+    // Preserve empty lines as paragraph breaks.
+    out += line.length ? (line + "<br>") : "<br>";
+  }
+  closeLists();
+
+  // Remove last <br> if present
+  out = out.replace(/(<br>)+$/, "");
+
+  // 4) Put back safe links.
+  out = out.replace(/\u0000LINK_(\d+)\u0000/g, (_, i) => {
+    const link = links[Number(i)];
+    if (!link) return "";
+    const t = escapeHtml(link.text);
+    const u = escapeHtml(link.url);
+    return `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`;
+  });
+
+  // 5) Put back safe code blocks.
+  out = out.replace(/\u0000CODEBLOCK_(\d+)\u0000/g, (_, i) => {
+    const b = codeBlocks[Number(i)];
+    if (!b) return "";
+    const code = escapeHtml(b.code).replace(/\n$/, "");
+    const lang = b.lang ? ` data-lang="${escapeHtml(b.lang)}"` : "";
+    return `<pre${lang}><code>${code}</code></pre>`;
+  });
+
+  return out;
+}
+
 function toast(msg){
   const el = $("#toast");
   el.textContent = msg;
@@ -454,9 +546,10 @@ async function onProfile(e){
 
   const fd = new FormData(e.currentTarget);
   const cats = (fd.get("categories") || "").split(",").map(s => s.trim()).filter(Boolean);
+  const city = String(fd.get("city") || "").trim() || null;
 
   try{
-    await apiFetch("/me/profile", { method:"PUT", body:{ preferred_categories: cats } });
+    await apiFetch("/me/profile", { method:"PUT", body:{ preferred_categories: cats, city } });
     setNotice("profileMsg", "Профиль сохранён.", "ok");
     toast("Профиль обновлён");
   } catch (e2){
@@ -482,7 +575,9 @@ function renderChat(){
     row.className = "msg " + (m.role === "user" ? "user" : "bot");
     const bubble = document.createElement("div");
     bubble.className = "bubble";
-    bubble.textContent = m.content;
+    // Bot messages may contain Markdown formatting.
+    // User messages are also rendered safely (escaped), so formatting can't inject HTML.
+    bubble.innerHTML = `<div class="md">${renderMarkdownSafe(m.content)}</div>`;
 
     const meta = document.createElement("div");
     meta.className = "mmeta";
@@ -595,6 +690,16 @@ function init(){
   $("#chatForm").addEventListener("submit", onChat);
   $("#clearChat").addEventListener("click", () => { state.chat = []; renderChat(); toast("Чат очищен"); });
   $("#chatMsg").addEventListener("input", (e) => autosize(e.target));
+  // Enter to send, Shift+Enter for a new line
+  $("#chatMsg").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.isComposing) return;
+    e.preventDefault();
+    const form = $("#chatForm");
+    if (form?.requestSubmit) form.requestSubmit();
+    else form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
   $("#chatLoginBtn").addEventListener("click", () => { openModal("authModal"); switchAuthTab("login"); });
 
   // auth
