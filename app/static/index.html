@@ -41,7 +41,7 @@
       <div class="menu hidden" id="userMenu" role="menu" aria-label="Меню пользователя">
         <div class="menuhead">
           <div class="menutitle" id="menuTitle">Гость</div>
-          <div class="menudesc" id="menuDesc">Войдите, чтобы добавлять места и общаться с помощником</div>
+          <div class="menudesc" id="menuDesc">Войдите, чтобы оставлять отзывы и общаться с помощником</div>
         </div>
 
         <div class="menusep"></div>
@@ -52,7 +52,7 @@
 
         <!-- Auth -->
         <button class="menuitem hidden" id="menuProfile" role="menuitem">Профиль</button>
-<button class="menuitem danger hidden" id="menuLogout" role="menuitem">Выйти</button>
+        <button class="menuitem danger hidden" id="menuLogout" role="menuitem">Выйти</button>
       </div>
     </div>
   </div>
@@ -64,7 +64,7 @@
     <button class="nav" data-tab="places">Места</button>
     <button class="nav" data-tab="recs">Рекомендации</button>
     <button class="nav" data-tab="chat">Чат</button>
-<div class="sidehint">
+    <div class="sidehint">
       <div class="hinttitle">Совет</div>
       <div class="hinttext">
         Заполните профиль (категории) — рекомендации станут точнее.
@@ -117,7 +117,7 @@
 
           <div class="card inner mt12">
             <div class="cardhead">
-              <h2>Недавно добавленные</h2>
+              <h2>Недавно импортированные</h2>
               <span class="pill" id="lastPlacesPill">—</span>
             </div>
             <div class="list mt12" id="lastPlaces"></div>
@@ -133,7 +133,6 @@
           <h1>Места</h1>
           <p class="muted">Фильтры, карточки, отзывы.</p>
         </div>
-        <button class="btn" id="openCreatePlace">Добавить место</button>
       </div>
 
       <div class="card mt12">
@@ -168,7 +167,7 @@
       <div class="empty hidden" id="placesEmpty">
         <div class="empty-icon">🗺</div>
         <div class="empty-title">Ничего не найдено</div>
-        <div class="muted">Попробуйте изменить фильтры или добавить новое место.</div>
+        <div class="muted">Попробуйте изменить фильтры.</div>
       </div>
     </section>
 
@@ -216,7 +215,9 @@
         </form>
       </div>
     </section>
-<footer class="footer muted">
+
+    <!-- MODERATION -->
+    <footer class="footer muted">
       Restify
     </footer>
   </section>
@@ -306,7 +307,7 @@
           <label class="field"><span>Оценка (1–5)</span><input type="number" min="1" max="5" name="rating" required /></label>
           <label class="field"><span>Комментарий</span><textarea rows="4" name="text" placeholder="Что понравилось? Что можно улучшить?"></textarea></label>
           <button class="btn" type="submit">Отправить отзыв</button>
-          <div class="muted small mt10">Отзыв может быть отправлен на проверку.</div>
+          <div class="muted small mt10">Отзыв будет опубликован сразу.</div>
         </form>
 
         <div class="notice hidden mt12" id="reviewMsg"></div>
@@ -315,36 +316,7 @@
   </div>
 </div>
 
-<!-- CREATE PLACE MODAL -->
-<div class="modal hidden" id="createPlaceModal" aria-hidden="true">
-  <div class="modalcard">
-    <div class="modalhead">
-      <div>
-        <div class="modaltitle">Добавить место</div>
-        <div class="muted small">Место может отправиться на проверку модератором.</div>
-      </div>
-      <button class="iconbtn" data-close aria-label="Закрыть">✕</button>
-    </div>
-
-    <form class="form mt12" id="createPlaceForm">
-      <label class="field"><span>Название</span><input name="name" required /></label>
-      <div class="grid2">
-        <label class="field"><span>Категория</span><input name="category" required /></label>
-        <label class="field"><span>Город</span><input name="city" required /></label>
-      </div>
-      <label class="field"><span>Описание</span><textarea rows="4" name="description"></textarea></label>
-      <div class="row wrap">
-        <button class="btn" type="submit">Отправить</button>
-        <button class="btn ghost" type="button" data-close>Отмена</button>
-      </div>
-    </form>
-
-    <div class="notice hidden mt12" id="createPlaceMsg"></div>
-  </div>
-</div>
-
 <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
-
 <script src="./app.js"></script>
 </body>
 </html>

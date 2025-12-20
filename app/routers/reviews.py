@@ -46,13 +46,13 @@ def create_review(
         place_id=place_id,
         user_id=current.id,
         rating=payload.rating,
-        text=(payload.text or "").strip() or None,
+        text=payload.text,
     )
     db.add(review)
     db.commit()
     db.refresh(review)
 
-    # Без модерации пересчитываем рейтинг сразу после добавления отзыва
+    # Update aggregates on the place
     recompute_place_rating(db, place_id=place_id)
 
     return _to_review_response(review)
@@ -98,7 +98,7 @@ async def summarize_reviews(
     )
     texts = [r.text for r in reviews if r.text]
     if not texts:
-        return ReviewSummaryResponse(place_id=place_id, summary="Нет текстовых отзывов для суммаризации.")
+        return ReviewSummaryResponse(place_id=place_id, summary="Нет текстовых отзывов.")
 
     try:
         summary = await llm.summarize_reviews(place_name=place.name, reviews=texts)

@@ -11,8 +11,6 @@ from app.db.base import Base
 class Review(Base):
     __tablename__ = "reviews"
 
-    # Минимальная схема (без статусов/модерации):
-    # id, place_id, user_id, rating, text, created_at
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     place_id: Mapped[int] = mapped_column(Integer, ForeignKey("places.id"), nullable=False, index=True)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users_auth.id"), nullable=False, index=True)
@@ -26,7 +24,5 @@ class Review(Base):
 
     __table_args__ = (
         CheckConstraint("rating >= 1 AND rating <= 5", name="ck_reviews_rating_range"),
+        Index("ix_reviews_place", "place_id"),
     )
-
-
-Index("ix_reviews_place_created_at", Review.place_id, Review.created_at)

@@ -8,5 +8,3 @@ env/
 .env
 .env.*
 logs/
-*.db
-app.db

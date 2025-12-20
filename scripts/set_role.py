@@ -3,7 +3,7 @@ from __future__ import annotations
 """Small helper: set user role by email.
 
 Usage:
-  python scripts/set_role.py user@example.com admin
+  python scripts/set_role.py user@example.com moderator
 """
 
 import sys
@@ -17,7 +17,7 @@ from app.models.enums import UserRole
 
 def main() -> int:
     if len(sys.argv) != 3:
-        print("Usage: python scripts/set_role.py <email> <role: user|admin>")
+        print("Usage: python scripts/set_role.py <email> <role: user|moderator|admin>")
         return 2
 
     email, role = sys.argv[1], sys.argv[2]

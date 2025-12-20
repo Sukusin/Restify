@@ -56,7 +56,7 @@ async def chat(
 
     stmt = select(Place)
     if payload.category:
-        stmt = stmt.where(Place.category == payload.category.strip().lower())
+        stmt = stmt.where(Place.category == payload.category.strip())
     if payload.city:
         stmt = stmt.where(Place.city == payload.city.strip())
     elif profile and profile.city:

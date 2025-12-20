@@ -8,7 +8,11 @@ from app.models.reviews import Review
 
 
 def recompute_place_rating(db: Session, *, place_id: int) -> None:
-    # Пересчёт по всем отзывам (модерации нет)
+    """Recompute aggregated rating fields for a place.
+
+    Keeps the places table minimal: aggregates are stored in-place (avg_rating, reviews_count).
+    """
+
     stmt = select(func.count(Review.id), func.avg(Review.rating)).where(Review.place_id == place_id)
     cnt, avg = db.execute(stmt).one()
 

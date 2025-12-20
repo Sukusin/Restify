@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Index, Integer, String
+from sqlalchemy import DateTime, Float, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -11,19 +11,25 @@ from app.db.base import Base
 class Place(Base):
     __tablename__ = "places"
 
+    # Minimal schema (only columns from the UI screenshot)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     city: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    address: Mapped[str] = mapped_column(String(250), nullable=False, default="")
+    address: Mapped[str | None] = mapped_column(String(250), nullable=True)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
+    # Aggregates (updated when reviews are added)
     avg_rating: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, index=True)
     reviews_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     reviews: Mapped[list["Review"]] = relationship(back_populates="place", cascade="all, delete-orphan")
 
-
-Index("ix_places_category_city", Place.category, Place.city)
+    __table_args__ = (
+        Index("ix_places_category_city", "category", "city"),
+        # Prevent duplicates on repeated imports (does not add new columns)
+        UniqueConstraint("name", "category", "city", "address", name="uq_places_ncca"),
+    )

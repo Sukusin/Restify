@@ -4,11 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.places import Place
-from app.models.users import UserAuth
-from app.schemas.places import PlaceCreate, PlaceListResponse, PlaceResponse
+from app.schemas.places import PlaceListResponse, PlaceResponse
 
 router = APIRouter(prefix="/places", tags=["places"])
 
@@ -27,26 +25,6 @@ def _to_place_response(place: Place) -> PlaceResponse:
     )
 
 
-@router.post("", response_model=PlaceResponse, status_code=201)
-def create_place(
-    payload: PlaceCreate,
-    current: UserAuth = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> PlaceResponse:
-    # Минимально: создаём место сразу доступным (без модерации и лишних полей).
-    place = Place(
-        name=payload.name.strip(),
-        category=payload.category.strip().lower(),
-        city=payload.city.strip(),
-        address=(payload.address or "").strip(),
-        description=(payload.description or "").strip() or None,
-    )
-    db.add(place)
-    db.commit()
-    db.refresh(place)
-    return _to_place_response(place)
-
-
 @router.get("", response_model=PlaceListResponse)
 def list_places(
     db: Session = Depends(get_db),
@@ -60,11 +38,10 @@ def list_places(
     stmt = select(Place)
 
     if q:
-        # SQLite-friendly search (case-insensitive)
-        q_norm = q.strip().lower()
-        stmt = stmt.where(func.lower(Place.name).like(f"%{q_norm}%"))
+        # SQLite-safe case-insensitive search
+        stmt = stmt.where(func.lower(Place.name).like(f"%{q.lower()}%"))
     if category:
-        stmt = stmt.where(Place.category == category.strip().lower())
+        stmt = stmt.where(Place.category == category.strip())
     if city:
         stmt = stmt.where(Place.city == city.strip())
     if min_rating is not None:

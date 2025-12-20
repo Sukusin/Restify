@@ -8,11 +8,11 @@ from app.models.reviews import Review
 
 
 def parse_categories(csv: str) -> list[str]:
-    return [c.strip().lower() for c in (csv or "").split(",") if c.strip()]
+    return [c.strip() for c in (csv or "").split(",") if c.strip()]
 
 
 def categories_to_csv(cats: list[str]) -> str:
-    return ",".join(sorted({c.strip().lower() for c in cats if c.strip()}))
+    return ",".join(sorted({c.strip() for c in cats if c.strip()}))
 
 
 def recommend_places(

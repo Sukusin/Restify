@@ -170,7 +170,7 @@ function renderLastPlaces(places){
   $("#lastPlacesPill").textContent = slice.length ? `${slice.length}` : "0";
 
   if (!slice.length){
-    box.innerHTML = `<div class="muted">Пока нет мест. Добавьте первое!</div>`;
+    box.innerHTML = `<div class="muted">Пока нет мест. Они появятся после импорта.</div>`;
     return;
   }
   for (const p of slice){
@@ -246,9 +246,10 @@ function setUserHeader(){
 
   $("#menuTitle").textContent = email;
   $("#menuDesc").textContent = email === "Гость"
-    ? "Войдите, чтобы добавлять места и общаться с помощником"
+    ? "Войдите, чтобы оставлять отзывы и общаться с помощником"
     : "Управляйте профилем и своими рекомендациями";
-$("#authCallout").classList.toggle("hidden", !!state.token);
+
+  $("#authCallout").classList.toggle("hidden", !!state.token);
   $("#chatNeedAuth").classList.toggle("hidden", !!state.token);
   $("#chatForm").classList.toggle("hidden", !state.token);
 }
@@ -393,26 +394,6 @@ async function onReview(e){
   }
 }
 
-async function onCreatePlace(e){
-  e.preventDefault();
-  clearNotice("createPlaceMsg");
-
-  const fd = new FormData(e.currentTarget);
-  const body = Object.fromEntries(fd.entries());
-
-  try{
-    await apiFetch("/places", { method:"POST", body });
-    setNotice("createPlaceMsg", "Место добавлено.", "ok");
-    toast("Место отправлено");
-    e.currentTarget.reset();
-    closeModal($("#createPlaceModal"));
-    loadPlaces();
-  } catch (e2){
-    const msg = e2.status === 401 ? "Сначала войдите в аккаунт." : "Не удалось добавить место.";
-    setNotice("createPlaceMsg", msg, "err");
-    console.error(e2);
-  }
-}
 
 /* AUTH */
 function switchAuthTab(name){
@@ -484,6 +465,7 @@ async function onProfile(e){
     console.error(e2);
   }
 }
+
 
 /* CHAT */
 function renderChat(){
@@ -600,8 +582,6 @@ function init(){
     $("#f_q").value=""; $("#f_city").value=""; $("#f_category").value=""; $("#f_min_rating").value="";
     loadPlaces();
   });
-  $("#openCreatePlace").addEventListener("click", () => openModal("createPlaceModal"));
-  $("#createPlaceForm").addEventListener("submit", onCreatePlace);
 
   // place modal
   $("#sumBtn").addEventListener("click", onSummary);
@@ -609,7 +589,9 @@ function init(){
 
   // recs
   $("#refreshRecs").addEventListener("click", loadRecs);
-// chat
+
+
+  // chat
   $("#chatForm").addEventListener("submit", onChat);
   $("#clearChat").addEventListener("click", () => { state.chat = []; renderChat(); toast("Чат очищен"); });
   $("#chatMsg").addEventListener("input", (e) => autosize(e.target));
