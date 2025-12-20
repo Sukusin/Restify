@@ -85,7 +85,6 @@ function openTab(name){
   $$(".tab").forEach(t => t.classList.toggle("active", t.id === `tab-${name}`));
   if (name === "places") loadPlaces();
   if (name === "recs") loadRecs();
-  if (name === "moderation") loadPending();
 }
 
 function openModal(id){
@@ -228,9 +227,6 @@ function updateUserMenu(){
 
   $("#menuProfile").classList.toggle("hidden", !isAuth);
   $("#menuLogout").classList.toggle("hidden", !isAuth);
-
-  const canModerate = isAuth && (role === "moderator" || role === "admin");
-  $("#menuModeration").classList.toggle("hidden", !canModerate);
 }
 
 /* AUTH STATE */
@@ -252,11 +248,7 @@ function setUserHeader(){
   $("#menuDesc").textContent = email === "Гость"
     ? "Войдите, чтобы добавлять места и общаться с помощником"
     : "Управляйте профилем и своими рекомендациями";
-
-  const canModerate = ["moderator","admin"].includes((role||"").toLowerCase());
-  $("#modTabBtn").classList.toggle("hidden", !canModerate);
-
-  $("#authCallout").classList.toggle("hidden", !!state.token);
+$("#authCallout").classList.toggle("hidden", !!state.token);
   $("#chatNeedAuth").classList.toggle("hidden", !!state.token);
   $("#chatForm").classList.toggle("hidden", !state.token);
 }
@@ -410,7 +402,7 @@ async function onCreatePlace(e){
 
   try{
     await apiFetch("/places", { method:"POST", body });
-    setNotice("createPlaceMsg", "Место отправлено. Оно может появиться после проверки.", "ok");
+    setNotice("createPlaceMsg", "Место добавлено.", "ok");
     toast("Место отправлено");
     e.currentTarget.reset();
     closeModal($("#createPlaceModal"));
@@ -490,79 +482,6 @@ async function onProfile(e){
     const msg = e2.status === 401 ? "Сначала войдите в аккаунт." : "Не удалось сохранить профиль.";
     setNotice("profileMsg", msg, "err");
     console.error(e2);
-  }
-}
-
-/* MODERATION */
-function renderPending(el, items, kind){
-  el.innerHTML = "";
-  if (!items.length){
-    el.innerHTML = `<div class="muted">Нет элементов для проверки</div>`;
-    return;
-  }
-
-  for (const raw of items){
-    const id = raw.id ?? raw.place_id ?? raw.review_id ?? raw.pk;
-    const title = kind === "place"
-      ? (raw.name ?? raw.title ?? `Место #${id}`)
-      : (raw.text ? (raw.text.slice(0,70) + (raw.text.length>70 ? "…" : "")) : `Отзыв #${id}`);
-
-    const meta = kind === "place"
-      ? `${raw.category ?? "—"} • ${raw.city ?? "—"}`
-      : `Место: ${raw.place_id ?? "—"} • Оценка: ${raw.rating ?? "—"}`;
-
-    const item = document.createElement("div");
-    item.className = "item";
-    item.innerHTML = `
-      <div class="item-main">
-        <div class="item-title">${escapeHtml(title)}</div>
-        <div class="item-meta">${escapeHtml(meta)}</div>
-      </div>
-      <div class="item-actions">
-        <button class="btn ghost" data-a="approve">Одобрить</button>
-        <button class="btn danger" data-a="reject">Отклонить</button>
-      </div>
-    `;
-
-    item.querySelectorAll("[data-a]").forEach(btn => {
-      btn.addEventListener("click", () => moderate(kind, id, btn.dataset.a));
-    });
-
-    el.appendChild(item);
-  }
-}
-
-async function moderate(kind, id, action){
-  try{
-    const path = kind === "place"
-      ? `/moderation/places/${id}/${action}`
-      : `/moderation/reviews/${id}/${action}`;
-    await apiFetch(path, { method:"POST" });
-    toast(action === "approve" ? "Одобрено" : "Отклонено");
-    loadPending();
-  } catch (e){
-    toast("Не удалось выполнить действие");
-    console.error(e);
-  }
-}
-
-async function loadPending(){
-  $("#pendingPlaces").innerHTML = `<div class="muted">Загрузка…</div>`;
-  $("#pendingReviews").innerHTML = `<div class="muted">Загрузка…</div>`;
-  try{
-    const [p, r] = await Promise.all([
-      apiFetch("/moderation/places/pending").catch(()=>[]),
-      apiFetch("/moderation/reviews/pending").catch(()=>[]),
-    ]);
-    const places = normList(p);
-    const reviews = normList(r);
-    $("#pendingPlacesPill").textContent = String(places.length);
-    $("#pendingReviewsPill").textContent = String(reviews.length);
-    renderPending($("#pendingPlaces"), places, "place");
-    renderPending($("#pendingReviews"), reviews, "review");
-  } catch (e){
-    $("#pendingPlaces").innerHTML = `<div class="muted">Нет доступа</div>`;
-    $("#pendingReviews").innerHTML = `<div class="muted">Нет доступа</div>`;
   }
 }
 
@@ -652,7 +571,6 @@ function init(){
   $("#menuLogin").addEventListener("click", () => { closeUserMenu(); openModal("authModal"); switchAuthTab("login"); });
   $("#menuRegister").addEventListener("click", () => { closeUserMenu(); openModal("authModal"); switchAuthTab("register"); });
   $("#menuProfile").addEventListener("click", () => { closeUserMenu(); openModal("authModal"); switchAuthTab("profile"); });
-  $("#menuModeration").addEventListener("click", () => { closeUserMenu(); openTab("moderation"); });
   $("#menuLogout").addEventListener("click", async () => {
     closeUserMenu();
     setToken("");
@@ -691,11 +609,7 @@ function init(){
 
   // recs
   $("#refreshRecs").addEventListener("click", loadRecs);
-
-  // moderation
-  $("#refreshPending").addEventListener("click", loadPending);
-
-  // chat
+// chat
   $("#chatForm").addEventListener("submit", onChat);
   $("#clearChat").addEventListener("click", () => { state.chat = []; renderChat(); toast("Чат очищен"); });
   $("#chatMsg").addEventListener("input", (e) => autosize(e.target));

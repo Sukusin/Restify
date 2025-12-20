@@ -120,7 +120,7 @@ async def fetch_places(session : aiohttp.ClientSession, category : str, cities :
 
             place = Place(
                 name=name,
-                category=CATEGORY_MAP.get(category),
+                category=(CATEGORY_MAP.get(category) or category).strip().lower(),
                 address=address,
                 city=city_name,
                 description=""

@@ -17,7 +17,7 @@ from app.db.base import Base
 
 import app.models  # noqa: F401  (register models)
 
-from app.routers import auth, users, places, reviews, recommendations, chat, moderation
+from app.routers import auth, users, places, reviews, recommendations, chat
 
 # Configure logging as early as possible
 configure_logging(log_dir=settings.log_dir, level=settings.log_level)
@@ -62,7 +62,6 @@ def create_app() -> FastAPI:
     app.include_router(reviews.router)
     app.include_router(recommendations.router)
     app.include_router(chat.router)
-    app.include_router(moderation.router)
 
     # Serve the provided minimal HTML UI
     static_dir = Path(__file__).resolve().parent / "static"

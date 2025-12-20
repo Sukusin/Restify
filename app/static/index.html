@@ -52,8 +52,7 @@
 
         <!-- Auth -->
         <button class="menuitem hidden" id="menuProfile" role="menuitem">Профиль</button>
-        <button class="menuitem hidden" id="menuModeration" role="menuitem">Модерация</button>
-        <button class="menuitem danger hidden" id="menuLogout" role="menuitem">Выйти</button>
+<button class="menuitem danger hidden" id="menuLogout" role="menuitem">Выйти</button>
       </div>
     </div>
   </div>
@@ -65,9 +64,7 @@
     <button class="nav" data-tab="places">Места</button>
     <button class="nav" data-tab="recs">Рекомендации</button>
     <button class="nav" data-tab="chat">Чат</button>
-    <button class="nav hidden" data-tab="moderation" id="modTabBtn">Модерация</button>
-
-    <div class="sidehint">
+<div class="sidehint">
       <div class="hinttitle">Совет</div>
       <div class="hinttext">
         Заполните профиль (категории) — рекомендации станут точнее.
@@ -219,37 +216,7 @@
         </form>
       </div>
     </section>
-
-    <!-- MODERATION -->
-    <section class="tab" id="tab-moderation">
-      <div class="row between">
-        <div>
-          <h1>Модерация</h1>
-          <p class="muted">Проверка пользовательского контента.</p>
-        </div>
-        <button class="btn ghost" id="refreshPending">Обновить</button>
-      </div>
-
-      <div class="grid2 mt12">
-        <div class="card">
-          <div class="cardhead">
-            <h2>Места на проверке</h2>
-            <span class="pill" id="pendingPlacesPill">—</span>
-          </div>
-          <div class="list mt12" id="pendingPlaces"></div>
-        </div>
-
-        <div class="card">
-          <div class="cardhead">
-            <h2>Отзывы на проверке</h2>
-            <span class="pill" id="pendingReviewsPill">—</span>
-          </div>
-          <div class="list mt12" id="pendingReviews"></div>
-        </div>
-      </div>
-    </section>
-
-    <footer class="footer muted">
+<footer class="footer muted">
       Restify
     </footer>
   </section>

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.db.session import get_db
-from app.models.enums import ModerationStatus, UserRole
 from app.models.places import Place
 from app.models.users import UserAuth
 from app.schemas.places import PlaceCreate, PlaceListResponse, PlaceResponse
@@ -18,14 +17,13 @@ def _to_place_response(place: Place) -> PlaceResponse:
     return PlaceResponse(
         id=place.id,
         name=place.name,
-        description=place.description,
         category=place.category,
         city=place.city,
         address=place.address,
-        status=place.status,
-        average_rating=place.average_rating,
-        review_count=place.review_count,
+        description=place.description,
         created_at=place.created_at,
+        avg_rating=place.avg_rating,
+        reviews_count=place.reviews_count,
     )
 
 
@@ -35,18 +33,13 @@ def create_place(
     current: UserAuth = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PlaceResponse:
-    status_val = ModerationStatus.pending.value
-    if current.role in (UserRole.moderator.value, UserRole.admin.value):
-        status_val = ModerationStatus.approved.value
-
+    # Минимально: создаём место сразу доступным (без модерации и лишних полей).
     place = Place(
-        name=payload.name,
-        description=payload.description,
+        name=payload.name.strip(),
         category=payload.category.strip().lower(),
         city=payload.city.strip(),
-        address=payload.address,
-        status=status_val,
-        created_by_user_id=current.id,
+        address=(payload.address or "").strip(),
+        description=(payload.description or "").strip() or None,
     )
     db.add(place)
     db.commit()
@@ -64,25 +57,33 @@ def list_places(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> PlaceListResponse:
-    stmt = select(Place).where(Place.status == ModerationStatus.approved.value)
+    stmt = select(Place)
 
     if q:
-        stmt = stmt.where(Place.name.ilike(f"%{q}%"))
+        # SQLite-friendly search (case-insensitive)
+        q_norm = q.strip().lower()
+        stmt = stmt.where(func.lower(Place.name).like(f"%{q_norm}%"))
     if category:
         stmt = stmt.where(Place.category == category.strip().lower())
     if city:
         stmt = stmt.where(Place.city == city.strip())
     if min_rating is not None:
-        stmt = stmt.where(Place.average_rating >= min_rating)
+        stmt = stmt.where(Place.avg_rating >= min_rating)
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-    items = list(db.scalars(stmt.order_by(Place.average_rating.desc(), Place.review_count.desc(), Place.name).limit(limit).offset(offset)).all())
+    items = list(
+        db.scalars(
+            stmt.order_by(Place.avg_rating.desc(), Place.reviews_count.desc(), Place.name)
+            .limit(limit)
+            .offset(offset)
+        ).all()
+    )
     return PlaceListResponse(items=[_to_place_response(p) for p in items], total=int(total or 0))
 
 
 @router.get("/{place_id}", response_model=PlaceResponse)
-def get_place(place_id: str, db: Session = Depends(get_db)) -> PlaceResponse:
+def get_place(place_id: int, db: Session = Depends(get_db)) -> PlaceResponse:
     place = db.get(Place, place_id)
-    if not place or place.status != ModerationStatus.approved.value:
+    if not place:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Place not found")
     return _to_place_response(place)
