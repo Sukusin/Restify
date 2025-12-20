@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     # `disabled`  - turn off LLM features
     llm_provider: str = "hf_local"  # hf_local | disabled
 
-    # Default: small free model (Apache-2.0)
-    hf_model_id: str = "Qwen/Qwen2.5-0.5B-Instruct"
+    # Default: small free model
+    hf_model_id: str = "Qwen/Qwen3-8B"
     # auto | cpu | cuda
     hf_device: str = "auto"
 

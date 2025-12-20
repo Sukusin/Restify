@@ -1,643 +1,716 @@
-const $ = (sel, root=document) => root.querySelector(sel);
-const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
 
 const state = {
-  baseUrl: "",
+  baseUrl: "",         // оставлено на будущее; в UI не показываем
   token: "",
-  openapi: null,
+  me: null,
+  activePlace: null,
+  chat: [],
+  theme: "dark",
 };
 
-function pretty(x) {
-  try { return JSON.stringify(x, null, 2); } catch { return String(x); }
+function pretty(x){ try { return JSON.stringify(x, null, 2); } catch { return String(x); } }
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
 }
 
-function toast(msg) {
+function toast(msg){
   const el = $("#toast");
   el.textContent = msg;
   el.classList.remove("hidden");
-  setTimeout(() => el.classList.add("hidden"), 2600);
+  clearTimeout(state._t);
+  state._t = setTimeout(() => el.classList.add("hidden"), 2400);
 }
 
-function setStatus(text) {
-  $("#statusLine").textContent = text;
+function setNotice(id, text, kind){
+  const el = $("#"+id);
+  el.classList.remove("hidden", "ok", "err");
+  el.classList.add(kind === "ok" ? "ok" : "err");
+  el.textContent = text;
 }
 
-function normalizeBaseUrl(v) {
-  v = (v || "").trim();
-  // empty means same origin
+function clearNotice(id){
+  const el = $("#"+id);
+  el.classList.add("hidden");
+  el.textContent = "";
+  el.classList.remove("ok", "err");
+}
+
+function normalizeBaseUrl(v){
+  v = (v||"").trim();
   if (!v) return "";
   return v.replace(/\/$/, "");
 }
-
-function setToken(token) {
-  state.token = token || "";
-  localStorage.setItem("restify_token", state.token);
-  $("#tokenState").textContent = state.token ? "есть" : "нет";
-}
-
-function setBaseUrl(url) {
-  state.baseUrl = normalizeBaseUrl(url);
-  localStorage.setItem("restify_baseUrl", state.baseUrl);
-  $("#baseUrl").value = state.baseUrl;
-}
-
-function apiUrl(path) {
+function apiUrl(path){
   const base = state.baseUrl || "";
   if (!path.startsWith("/")) path = "/" + path;
   return base + path;
 }
 
-async function apiFetch(path, options = {}) {
+async function apiFetch(path, options={}){
   const url = apiUrl(path);
   const headers = new Headers(options.headers || {});
-
-  if (state.token && !headers.has("Authorization")) {
+  if (state.token && !headers.has("Authorization")){
     headers.set("Authorization", `Bearer ${state.token}`);
   }
-
-  // if body is plain object, serialize as JSON
-  if (options.body && typeof options.body === "object" && !(options.body instanceof FormData) && !(options.body instanceof URLSearchParams)) {
+  if (options.body && typeof options.body === "object" &&
+      !(options.body instanceof FormData) && !(options.body instanceof URLSearchParams)){
     if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     options.body = JSON.stringify(options.body);
   }
-
   options.headers = headers;
 
-  setStatus(`${options.method || "GET"} ${path}`);
   const res = await fetch(url, options);
-
   const ctype = (res.headers.get("content-type") || "").toLowerCase();
   let data = null;
 
-  if (res.status === 204) {
-    data = { ok: true, status: 204 };
-  } else if (ctype.includes("application/json")) {
-    data = await res.json().catch(() => null);
-  } else {
-    data = await res.text().catch(() => "");
-  }
+  if (res.status === 204) data = { ok:true, status:204 };
+  else if (ctype.includes("application/json")) data = await res.json().catch(()=>null);
+  else data = await res.text().catch(()=> "");
 
-  if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`);
-    err.status = res.status;
-    err.data = data;
-    throw err;
+  if (!res.ok){
+    const e = new Error(`HTTP ${res.status}`);
+    e.status = res.status;
+    e.data = data;
+    throw e;
   }
-
   return data;
 }
 
-function bindTabs() {
-  $$(".navitem").forEach(btn => {
-    btn.addEventListener("click", () => {
-      $$(".navitem").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-
-      const tab = btn.dataset.tab;
-      $$(".tab").forEach(t => t.classList.remove("active"));
-      $(`#tab-${tab}`).classList.add("active");
-    });
-  });
+function openTab(name){
+  $$(".nav").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $$(".tab").forEach(t => t.classList.toggle("active", t.id === `tab-${name}`));
+  if (name === "places") loadPlaces();
+  if (name === "recs") loadRecs();
+  if (name === "moderation") loadPending();
 }
 
-function fillOut(el, value) {
-  el.textContent = typeof value === "string" ? value : pretty(value);
+function openModal(id){
+  const el = $("#"+id);
+  el.classList.remove("hidden");
+  el.setAttribute("aria-hidden", "false");
+}
+function closeModal(el){
+  el.classList.add("hidden");
+  el.setAttribute("aria-hidden", "true");
 }
 
-function formToObject(form) {
-  const fd = new FormData(form);
-  const obj = {};
-  for (const [k, v] of fd.entries()) obj[k] = v;
-  return obj;
-}
-
-function qs(params) {
-  const out = new URLSearchParams();
-  Object.entries(params).forEach(([k,v]) => {
-    if (v === undefined || v === null) return;
-    const s = String(v).trim();
-    if (!s) return;
-    out.set(k, s);
-  });
-  const q = out.toString();
-  return q ? `?${q}` : "";
-}
-
-/* ---------- Auth / Profile ---------- */
-
-async function onRegister(e) {
-  e.preventDefault();
-  const out = $("#registerOut");
-  fillOut(out, "");
-  try {
-    const { email, password } = formToObject(e.currentTarget);
-    const data = await apiFetch("/auth/register", {
-      method: "POST",
-      body: { email, password },
-    });
-    fillOut(out, data);
-    toast("Зарегистрировано");
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка регистрации");
-  }
-}
-
-async function onLogin(e) {
-  e.preventDefault();
-  const out = $("#loginOut");
-  fillOut(out, "");
-  try {
-    const { username, password } = formToObject(e.currentTarget);
-    // Most FastAPI OAuth2 token endpoints expect x-www-form-urlencoded (OAuth2PasswordRequestForm)
-    const body = new URLSearchParams();
-    body.set("username", username);
-    body.set("password", password);
-
-    const data = await apiFetch("/auth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-
-    if (data?.access_token) setToken(data.access_token);
-    fillOut(out, data);
-    toast("Токен получен");
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка логина");
-  }
-}
-
-async function onMe() {
-  const out = $("#meOut");
-  fillOut(out, "");
-  try {
-    const data = await apiFetch("/me");
-    fillOut(out, data);
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка /me");
-  }
-}
-
-async function onProfile(e) {
-  e.preventDefault();
-  const out = $("#profileOut");
-  fillOut(out, "");
-  try {
-    const { categories } = formToObject(e.currentTarget);
-    const preferred_categories = (categories || "")
-      .split(",")
-      .map(s => s.trim())
-      .filter(Boolean);
-
-    const data = await apiFetch("/me/profile", {
-      method: "PUT",
-      body: { preferred_categories },
-    });
-    fillOut(out, data);
-    toast("Профиль обновлён");
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка профиля");
-  }
-}
-
-/* ---------- Places ---------- */
-
-async function onPlacesSearch(e) {
-  e.preventDefault();
-  const out = $("#placesOut");
-  fillOut(out, "");
-  try {
-    const params = formToObject(e.currentTarget);
-    const data = await apiFetch(`/places${qs(params)}`);
-    fillOut(out, data);
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка /places");
-  }
-}
-
-async function onCreatePlace(e) {
-  e.preventDefault();
-  const out = $("#createPlaceOut");
-  fillOut(out, "");
-  try {
-    const { name, category, city, description } = formToObject(e.currentTarget);
-    const data = await apiFetch("/places", {
-      method: "POST",
-      body: { name, category, city, description },
-    });
-    fillOut(out, data);
-    toast("Место отправлено");
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка создания места");
-  }
-}
-
-async function onAddReview(e) {
-  e.preventDefault();
-  const out = $("#addReviewOut");
-  fillOut(out, "");
-  try {
-    const { place_id, rating, text } = formToObject(e.currentTarget);
-    const data = await apiFetch(`/places/${place_id}/reviews`, {
-      method: "POST",
-      body: { rating: Number(rating), text },
-    });
-    fillOut(out, data);
-    toast("Отзыв отправлен");
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка отзыва");
-  }
-}
-
-async function onSummary(e) {
-  e.preventDefault();
-  const out = $("#summaryOut");
-  fillOut(out, "");
-  try {
-    const { place_id } = formToObject(e.currentTarget);
-    const data = await apiFetch(`/places/${place_id}/reviews/summary`);
-    fillOut(out, data);
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка summary");
-  }
-}
-
-/* ---------- Recs ---------- */
-
-async function onRecs() {
-  const out = $("#recsOut");
-  fillOut(out, "");
-  try {
-    const data = await apiFetch("/recommendations");
-    fillOut(out, data);
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка /recommendations");
-  }
-}
-
-/* ---------- Chat ---------- */
-
-async function onChat(e) {
-  e.preventDefault();
-  const out = $("#chatOut");
-  fillOut(out, "");
-  try {
-    const { message } = formToObject(e.currentTarget);
-    const data = await apiFetch("/chat", {
-      method: "POST",
-      body: { message },
-    });
-    fillOut(out, data);
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка /chat");
-  }
-}
-
-/* ---------- Moderation ---------- */
-
-async function onPendingPlaces() {
-  const out = $("#pendingPlacesOut");
-  fillOut(out, "");
-  try {
-    const data = await apiFetch("/moderation/places/pending");
-    fillOut(out, data);
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка pending places");
-  }
-}
-
-async function onPendingReviews() {
-  const out = $("#pendingReviewsOut");
-  fillOut(out, "");
-  try {
-    const data = await apiFetch("/moderation/reviews/pending");
-    fillOut(out, data);
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка pending reviews");
-  }
-}
-
-async function onModeratePlace(e) {
-  e.preventDefault();
-  const out = $("#moderatePlaceOut");
-  fillOut(out, "");
-  const action = e.submitter?.dataset?.action || "approve";
-  try {
-    const { place_id } = formToObject(e.currentTarget);
-    const data = await apiFetch(`/moderation/places/${place_id}/${action}`, { method: "POST" });
-    fillOut(out, data);
-    toast(`Place ${action}`);
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка модерации места");
-  }
-}
-
-async function onModerateReview(e) {
-  e.preventDefault();
-  const out = $("#moderateReviewOut");
-  fillOut(out, "");
-  const action = e.submitter?.dataset?.action || "approve";
-  try {
-    const { review_id } = formToObject(e.currentTarget);
-    const data = await apiFetch(`/moderation/reviews/${review_id}/${action}`, { method: "POST" });
-    fillOut(out, data);
-    toast(`Review ${action}`);
-  } catch (err) {
-    fillOut(out, { error: err.message, details: err.data });
-    toast("Ошибка модерации отзыва");
-  }
-}
-
-/* ---------- OpenAPI Explorer ---------- */
-
-function schemaToExample(schema) {
-  if (!schema) return {};
-  if (schema.example !== undefined) return schema.example;
-
-  if (schema.default !== undefined) return schema.default;
-
-  if (schema.type === "object" && schema.properties) {
-    const o = {};
-    for (const [k, s] of Object.entries(schema.properties)) {
-      o[k] = schemaToExample(s);
+function bindModals(){
+  $$("[data-close]").forEach(btn => btn.addEventListener("click", () => closeModal(btn.closest(".modal"))));
+  $$(".modal").forEach(m => m.addEventListener("click", (e) => { if (e.target === m) closeModal(m); }));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      $$(".modal:not(.hidden)").forEach(closeModal);
+      closeUserMenu();
     }
-    return o;
-  }
-  if (schema.type === "array" && schema.items) return [schemaToExample(schema.items)];
-  if (schema.type === "string") return "";
-  if (schema.type === "integer" || schema.type === "number") return 0;
-  if (schema.type === "boolean") return false;
-  return {};
+  });
 }
 
-function resolveRef(openapi, ref) {
-  // only local refs like "#/components/schemas/..."
-  const p = ref.replace(/^#\//, "").split("/");
-  let cur = openapi;
-  for (const part of p) cur = cur?.[part];
-  return cur;
+function normList(data){
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.items)) return data.items;
+  if (data && Array.isArray(data.results)) return data.results;
+  return [];
 }
 
-function getRequestBodySchema(openapi, op) {
-  const rb = op.requestBody;
-  if (!rb) return null;
-
-  const content = rb.content || {};
-  const entry = content["application/json"] || content["application/*+json"] || content["application/x-www-form-urlencoded"] || null;
-  if (!entry) return null;
-
-  let schema = entry.schema || null;
-  if (schema?.$ref) schema = resolveRef(openapi, schema.$ref);
-  return { schema, contentType: Object.keys(content)[0] };
+function pickPlace(p){
+  const id = p.id ?? p.place_id ?? p.pk ?? null;
+  const name = p.name ?? p.title ?? "Без названия";
+  const category = p.category ?? p.type ?? "—";
+  const city = p.city ?? p.location_city ?? "—";
+  const description = p.description ?? p.about ?? "";
+  const avg = p.avg_rating ?? p.rating_avg ?? p.rating ?? p.average_rating ?? null;
+  const reviews = p.reviews_count ?? p.review_count ?? p.n_reviews ?? null;
+  return { id, name, category, city, description, avg, reviews, raw:p };
 }
 
-function getResponseSchema(openapi, op) {
-  const r = op.responses?.["200"] || op.responses?.["201"] || null;
-  if (!r) return null;
-  const content = r.content || {};
-  const entry = content["application/json"] || content["application/*+json"] || null;
-  if (!entry) return null;
-  let schema = entry.schema || null;
-  if (schema?.$ref) schema = resolveRef(openapi, schema.$ref);
-  return schema;
+function fmtRating(x){
+  if (x === null || x === undefined) return null;
+  const n = Number(x);
+  if (Number.isNaN(n)) return null;
+  return Math.round(n * 10) / 10;
 }
 
-function buildEndpointCard(path, method, op) {
+function placeCard(place){
   const el = document.createElement("div");
-  el.className = "endpoint";
+  el.className = "place";
 
-  const summary = op.summary || op.operationId || "";
-  const pill = `${method.toUpperCase()} ${path}`;
+  const r = fmtRating(place.avg);
+  const rating = r !== null ? `${r} ★` : "— ★";
 
   el.innerHTML = `
-    <div class="endpointHeader">
-      <div>
-        <span class="pill method">${pill}</span>
-        <div style="margin-top:6px; font-weight:700">${escapeHtml(summary)}</div>
-      </div>
-      <button class="btn btn-ghost" data-toggle>Открыть</button>
+    <div class="place-title">${escapeHtml(place.name)}</div>
+    <div class="place-sub">${escapeHtml(place.category)} • ${escapeHtml(place.city)}</div>
+    <div class="badges">
+      <span class="rating">${escapeHtml(rating)}</span>
+      <span class="tag">${escapeHtml(place.category)}</span>
+      <span class="tag">${escapeHtml(place.city)}</span>
+      ${place.reviews !== null && place.reviews !== undefined ? `<span class="pill">${place.reviews} отзывов</span>` : ""}
     </div>
-    <div class="endpointBody">
-      <div class="muted">${escapeHtml(op.description || "")}</div>
-
-      <div class="divider"></div>
-
-      <div class="kv" data-fields></div>
-
-      <label class="field" style="margin-top:10px">
-        <span>Body (JSON)</span>
-        <textarea rows="6" data-body placeholder="{}"></textarea>
-      </label>
-
-      <div class="row" style="margin-top:10px">
-        <button class="btn" data-call>Вызвать</button>
-      </div>
-
-      <pre class="out" data-out></pre>
-    </div>
+    ${place.description ? `<div class="desc">${escapeHtml(place.description)}</div>` : ""}
   `;
-
-  const btn = el.querySelector("[data-toggle]");
-  btn.addEventListener("click", () => {
-    el.classList.toggle("open");
-    btn.textContent = el.classList.contains("open") ? "Закрыть" : "Открыть";
-  });
-
-  const fields = el.querySelector("[data-fields]");
-  const bodyTa = el.querySelector("[data-body]");
-  const out = el.querySelector("[data-out]");
-
-  // Path params
-  const pathParams = Array.from(path.matchAll(/\{([^}]+)\}/g)).map(m => m[1]);
-  for (const p of pathParams) {
-    fields.appendChild(makeField(`path:${p}`, p));
-  }
-
-  // Query params from OpenAPI
-  const params = op.parameters || [];
-  for (const prm of params) {
-    if (prm?.$ref) continue;
-    if (prm.in === "query") {
-      fields.appendChild(makeField(`query:${prm.name}`, prm.name));
-    }
-  }
-
-  // Request body example
-  const rb = getRequestBodySchema(state.openapi, op);
-  if (rb?.schema) {
-    const example = schemaToExample(rb.schema);
-    bodyTa.value = pretty(example);
-  } else {
-    bodyTa.value = "{}";
-  }
-
-  // If no request body expected, hide textarea a bit
-  if (!rb) {
-    bodyTa.value = "{}";
-    bodyTa.closest(".field").style.opacity = "0.75";
-  }
-
-  el.querySelector("[data-call]").addEventListener("click", async () => {
-    fillOut(out, "");
-    try {
-      // build final path with params
-      let finalPath = path;
-      for (const p of pathParams) {
-        const v = el.querySelector(`[name="path:${p}"]`)?.value?.trim();
-        if (!v) throw new Error(`path param '${p}' is required`);
-        finalPath = finalPath.replace(`{${p}}`, encodeURIComponent(v));
-      }
-
-      // query
-      const q = new URLSearchParams();
-      for (const prm of params) {
-        if (prm?.$ref) continue;
-        if (prm.in === "query") {
-          const v = el.querySelector(`[name="query:${prm.name}"]`)?.value?.trim();
-          if (v) q.set(prm.name, v);
-        }
-      }
-      const qstr = q.toString() ? `?${q.toString()}` : "";
-
-      // body
-      let body = undefined;
-      const hasBody = !!rb;
-      if (hasBody) {
-        const raw = bodyTa.value.trim();
-        if (raw && raw !== "{}") {
-          try { body = JSON.parse(raw); }
-          catch { throw new Error("Body is not valid JSON"); }
-        } else {
-          body = {};
-        }
-      }
-
-      const data = await apiFetch(`${finalPath}${qstr}`, {
-        method: method.toUpperCase(),
-        body: hasBody ? body : undefined,
-      });
-
-      fillOut(out, data);
-    } catch (err) {
-      fillOut(out, { error: err.message, details: err.data });
-      toast("Ошибка вызова");
-    }
-  });
-
+  el.addEventListener("click", () => openPlace(place));
   return el;
 }
 
-function makeField(name, label) {
-  const wrap = document.createElement("label");
-  wrap.className = "field";
-  wrap.innerHTML = `<span>${escapeHtml(label)}</span><input type="text" name="${escapeHtml(name)}" />`;
-  return wrap;
+function setKPIs(places){
+  $("#kpiPlaces").textContent = String(places.length);
+  const cities = new Set(places.map(p => (p.city||"").toLowerCase()).filter(Boolean));
+  const cats = new Set(places.map(p => (p.category||"").toLowerCase()).filter(Boolean));
+  $("#kpiCities").textContent = String(cities.size);
+  $("#kpiCats").textContent = String(cats.size);
 }
 
-function escapeHtml(s) {
-  return String(s || "").replace(/[&<>"']/g, c => ({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#39;",
-  }[c]));
-}
+function renderLastPlaces(places){
+  const box = $("#lastPlaces");
+  box.innerHTML = "";
+  const slice = places.slice(0, 5);
+  $("#lastPlacesPill").textContent = slice.length ? `${slice.length}` : "0";
 
-async function loadOpenAPI() {
-  const list = $("#openapiList");
-  const info = $("#openapiInfo");
-  list.innerHTML = "";
-  info.textContent = "";
-  try {
-    const spec = await apiFetch("/openapi.json");
-    state.openapi = spec;
-
-    const title = spec?.info?.title || "API";
-    const version = spec?.info?.version || "";
-    info.textContent = `${title} ${version}`;
-
-    const filter = $("#filterOpenapi").value.trim();
-
-    const entries = [];
-    for (const [path, methods] of Object.entries(spec.paths || {})) {
-      if (filter && !path.includes(filter)) continue;
-      for (const [method, op] of Object.entries(methods || {})) {
-        if (!["get","post","put","delete","patch","head","options"].includes(method)) continue;
-        entries.push({ path, method, op });
-      }
-    }
-
-    // sort stable: path then method
-    entries.sort((a,b) => (a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path)));
-
-    for (const { path, method, op } of entries) {
-      list.appendChild(buildEndpointCard(path, method, op));
-    }
-
-    toast("OpenAPI загружен");
-  } catch (err) {
-    info.textContent = "Не получилось загрузить /openapi.json (проверь base URL и CORS)";
-    toast("Ошибка OpenAPI");
+  if (!slice.length){
+    box.innerHTML = `<div class="muted">Пока нет мест. Добавьте первое!</div>`;
+    return;
+  }
+  for (const p of slice){
+    const item = document.createElement("div");
+    item.className = "item";
+    item.innerHTML = `
+      <div class="item-main">
+        <div class="item-title">${escapeHtml(p.name)}</div>
+        <div class="item-meta">${escapeHtml(p.category)} • ${escapeHtml(p.city)}</div>
+      </div>
+      <div class="item-actions">
+        <button class="btn ghost" data-open>Открыть</button>
+      </div>
+    `;
+    item.querySelector("[data-open]").addEventListener("click", () => openPlace(p));
+    box.appendChild(item);
   }
 }
 
-/* ---------- Init ---------- */
+/* THEME */
+function applyTheme(theme){
+  state.theme = (theme === "light") ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", state.theme);
+  localStorage.setItem("restify_theme", state.theme);
+  $("#themeToggle").querySelector(".btnicon").textContent = state.theme === "light" ? "☀" : "◐";
+}
+function toggleTheme(){
+  applyTheme(state.theme === "light" ? "dark" : "light");
+  toast(state.theme === "light" ? "Светлая тема" : "Тёмная тема");
+}
 
-function init() {
-  bindTabs();
+/* USER MENU */
+function openUserMenu(){
+  const menu = $("#userMenu");
+  menu.classList.remove("hidden");
+  $("#userMenuBtn").setAttribute("aria-expanded", "true");
+}
+function closeUserMenu(){
+  const menu = $("#userMenu");
+  menu.classList.add("hidden");
+  $("#userMenuBtn").setAttribute("aria-expanded", "false");
+}
+function toggleUserMenu(){
+  const menu = $("#userMenu");
+  if (menu.classList.contains("hidden")) openUserMenu();
+  else closeUserMenu();
+}
+function updateUserMenu(){
+  const isAuth = !!state.token && !!state.me;
+  const role = (state.me?.role || "—").toLowerCase();
 
-  setBaseUrl(localStorage.getItem("restify_baseUrl") || "");
+  $("#menuLogin").classList.toggle("hidden", isAuth);
+  $("#menuRegister").classList.toggle("hidden", isAuth);
+
+  $("#menuProfile").classList.toggle("hidden", !isAuth);
+  $("#menuLogout").classList.toggle("hidden", !isAuth);
+
+  const canModerate = isAuth && (role === "moderator" || role === "admin");
+  $("#menuModeration").classList.toggle("hidden", !canModerate);
+}
+
+/* AUTH STATE */
+function setToken(tok){
+  state.token = tok || "";
+  localStorage.setItem("restify_token", state.token);
+}
+function setUserHeader(){
+  const email = state.me?.email || "Гость";
+  const role = state.me?.role || "—";
+
+  $("#userEmail").textContent = email;
+  $("#userRole").textContent = role;
+
+  const letter = (email && email !== "Гость") ? email.trim()[0].toUpperCase() : "?";
+  $("#userAvatar").textContent = letter;
+
+  $("#menuTitle").textContent = email;
+  $("#menuDesc").textContent = email === "Гость"
+    ? "Войдите, чтобы добавлять места и общаться с помощником"
+    : "Управляйте профилем и своими рекомендациями";
+
+  const canModerate = ["moderator","admin"].includes((role||"").toLowerCase());
+  $("#modTabBtn").classList.toggle("hidden", !canModerate);
+
+  $("#authCallout").classList.toggle("hidden", !!state.token);
+  $("#chatNeedAuth").classList.toggle("hidden", !!state.token);
+  $("#chatForm").classList.toggle("hidden", !state.token);
+}
+
+async function refreshMe(){
+  if (!state.token){
+    state.me = null;
+    setUserHeader();
+    updateUserMenu();
+    return;
+  }
+  try{
+    const me = await apiFetch("/me");
+    state.me = me;
+  } catch {
+    setToken("");
+    state.me = null;
+  }
+  setUserHeader();
+  updateUserMenu();
+}
+
+/* QUERY */
+function qs(params){
+  const q = new URLSearchParams();
+  for (const [k,v] of Object.entries(params)){
+    if (v === null || v === undefined) continue;
+    const s = String(v).trim();
+    if (!s) continue;
+    q.set(k, s);
+  }
+  const out = q.toString();
+  return out ? `?${out}` : "";
+}
+
+/* PLACES */
+async function loadPlaces(){
+  const params = {
+    q: $("#f_q").value,
+    city: $("#f_city").value,
+    category: $("#f_category").value,
+    min_rating: $("#f_min_rating").value,
+  };
+
+  $("#placesCount").textContent = "Загрузка…";
+  $("#placesGrid").innerHTML = "";
+  $("#placesEmpty").classList.add("hidden");
+
+  try{
+    const data = await apiFetch(`/places${qs(params)}`);
+    const places = normList(data).map(pickPlace).filter(p => p.id !== null);
+
+    $("#placesCount").textContent = places.length ? `Найдено: ${places.length}` : "Ничего не найдено";
+    if (!places.length){
+      $("#placesEmpty").classList.remove("hidden");
+      setKPIs([]);
+      renderLastPlaces([]);
+      return;
+    }
+
+    for (const p of places) $("#placesGrid").appendChild(placeCard(p));
+    setKPIs(places);
+    renderLastPlaces(places);
+  } catch (e){
+    $("#placesCount").textContent = "Не удалось загрузить";
+    toast("Не удалось загрузить места");
+    console.error(e);
+  }
+}
+
+async function loadRecs(){
+  $("#recsGrid").innerHTML = "";
+  $("#recsEmpty").classList.add("hidden");
+
+  try{
+    const data = await apiFetch("/recommendations");
+    const recs = normList(data).map(pickPlace).filter(p => p.id !== null);
+
+    if (!recs.length) $("#recsEmpty").classList.remove("hidden");
+    else for (const p of recs) $("#recsGrid").appendChild(placeCard(p));
+  } catch (e){
+    $("#recsEmpty").classList.remove("hidden");
+    toast("Не удалось загрузить рекомендации");
+    console.error(e);
+  }
+}
+
+function openPlace(place){
+  state.activePlace = place;
+  $("#placeTitle").textContent = place.name;
+  $("#placeSub").textContent = `${place.category} • ${place.city}`;
+  $("#placeDesc").textContent = place.description || "Описание не указано.";
+
+  const r = fmtRating(place.avg);
+  $("#placeBadges").innerHTML = `
+    <span class="tag">${escapeHtml(place.category)}</span>
+    <span class="tag">${escapeHtml(place.city)}</span>
+    <span class="rating">${escapeHtml(r !== null ? (r + " ★") : "— ★")}</span>
+  `;
+
+  clearNotice("sumMsg");
+  clearNotice("reviewMsg");
+  $("#reviewForm [name='place_id']").value = place.id;
+
+  openModal("placeModal");
+}
+
+async function onSummary(){
+  clearNotice("sumMsg");
+  setNotice("sumMsg", "Готовим краткую выжимку…", "ok");
+
+  try{
+    const id = state.activePlace?.id;
+    const data = await apiFetch(`/places/${id}/reviews/summary`);
+    const text = typeof data === "string" ? data : (data.summary ?? data.text ?? pretty(data));
+    setNotice("sumMsg", text, "ok");
+  } catch (e){
+    const msg = e.status === 401 ? "Войдите в аккаунт, чтобы использовать эту функцию." : "Не удалось сформировать выжимку.";
+    setNotice("sumMsg", msg, "err");
+    console.error(e);
+  }
+}
+
+async function onReview(e){
+  e.preventDefault();
+  clearNotice("reviewMsg");
+
+  const fd = new FormData(e.currentTarget);
+  const place_id = fd.get("place_id");
+  const rating = Number(fd.get("rating"));
+  const text = fd.get("text") || "";
+
+  try{
+    await apiFetch(`/places/${place_id}/reviews`, { method:"POST", body:{rating, text} });
+    setNotice("reviewMsg", "Спасибо! Отзыв отправлен.", "ok");
+    toast("Отзыв отправлен");
+    e.currentTarget.reset();
+  } catch (e2){
+    const msg = e2.status === 401 ? "Сначала войдите в аккаунт." : "Не удалось отправить отзыв.";
+    setNotice("reviewMsg", msg, "err");
+    console.error(e2);
+  }
+}
+
+async function onCreatePlace(e){
+  e.preventDefault();
+  clearNotice("createPlaceMsg");
+
+  const fd = new FormData(e.currentTarget);
+  const body = Object.fromEntries(fd.entries());
+
+  try{
+    await apiFetch("/places", { method:"POST", body });
+    setNotice("createPlaceMsg", "Место отправлено. Оно может появиться после проверки.", "ok");
+    toast("Место отправлено");
+    e.currentTarget.reset();
+    closeModal($("#createPlaceModal"));
+    loadPlaces();
+  } catch (e2){
+    const msg = e2.status === 401 ? "Сначала войдите в аккаунт." : "Не удалось добавить место.";
+    setNotice("createPlaceMsg", msg, "err");
+    console.error(e2);
+  }
+}
+
+/* AUTH */
+function switchAuthTab(name){
+  $$(".tabbtn").forEach(b => b.classList.toggle("active", b.dataset.atab === name));
+  $$(".atab").forEach(t => t.classList.toggle("active", t.id === `atab-${name}`));
+}
+
+async function onRegister(e){
+  e.preventDefault();
+  clearNotice("registerMsg");
+
+  const fd = new FormData(e.currentTarget);
+  try{
+    await apiFetch("/auth/register", { method:"POST", body:{ email: fd.get("email"), password: fd.get("password") } });
+    setNotice("registerMsg", "Аккаунт создан. Теперь выполните вход.", "ok");
+    toast("Аккаунт создан");
+    switchAuthTab("login");
+  } catch (err){
+    const msg = "Не удалось зарегистрироваться. Проверьте email и пароль.";
+    setNotice("registerMsg", msg, "err");
+    console.error(err);
+  }
+}
+
+async function onLogin(e){
+  e.preventDefault();
+  clearNotice("loginMsg");
+
+  const fd = new FormData(e.currentTarget);
+  const form = new URLSearchParams();
+  form.set("username", fd.get("username"));
+  form.set("password", fd.get("password"));
+
+  try{
+    const data = await apiFetch("/auth/token", {
+      method:"POST",
+      headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+      body: form,
+    });
+    if (data?.access_token){
+      setToken(data.access_token);
+      await refreshMe();
+      setNotice("loginMsg", "Вход выполнен.", "ok");
+      toast("Добро пожаловать!");
+      closeModal($("#authModal"));
+    } else {
+      setNotice("loginMsg", "Не удалось выполнить вход.", "err");
+    }
+  } catch (err){
+    setNotice("loginMsg", "Неверный email или пароль.", "err");
+    console.error(err);
+  }
+}
+
+async function onProfile(e){
+  e.preventDefault();
+  clearNotice("profileMsg");
+
+  const fd = new FormData(e.currentTarget);
+  const cats = (fd.get("categories") || "").split(",").map(s => s.trim()).filter(Boolean);
+
+  try{
+    await apiFetch("/me/profile", { method:"PUT", body:{ preferred_categories: cats } });
+    setNotice("profileMsg", "Профиль сохранён.", "ok");
+    toast("Профиль обновлён");
+  } catch (e2){
+    const msg = e2.status === 401 ? "Сначала войдите в аккаунт." : "Не удалось сохранить профиль.";
+    setNotice("profileMsg", msg, "err");
+    console.error(e2);
+  }
+}
+
+/* MODERATION */
+function renderPending(el, items, kind){
+  el.innerHTML = "";
+  if (!items.length){
+    el.innerHTML = `<div class="muted">Нет элементов для проверки</div>`;
+    return;
+  }
+
+  for (const raw of items){
+    const id = raw.id ?? raw.place_id ?? raw.review_id ?? raw.pk;
+    const title = kind === "place"
+      ? (raw.name ?? raw.title ?? `Место #${id}`)
+      : (raw.text ? (raw.text.slice(0,70) + (raw.text.length>70 ? "…" : "")) : `Отзыв #${id}`);
+
+    const meta = kind === "place"
+      ? `${raw.category ?? "—"} • ${raw.city ?? "—"}`
+      : `Место: ${raw.place_id ?? "—"} • Оценка: ${raw.rating ?? "—"}`;
+
+    const item = document.createElement("div");
+    item.className = "item";
+    item.innerHTML = `
+      <div class="item-main">
+        <div class="item-title">${escapeHtml(title)}</div>
+        <div class="item-meta">${escapeHtml(meta)}</div>
+      </div>
+      <div class="item-actions">
+        <button class="btn ghost" data-a="approve">Одобрить</button>
+        <button class="btn danger" data-a="reject">Отклонить</button>
+      </div>
+    `;
+
+    item.querySelectorAll("[data-a]").forEach(btn => {
+      btn.addEventListener("click", () => moderate(kind, id, btn.dataset.a));
+    });
+
+    el.appendChild(item);
+  }
+}
+
+async function moderate(kind, id, action){
+  try{
+    const path = kind === "place"
+      ? `/moderation/places/${id}/${action}`
+      : `/moderation/reviews/${id}/${action}`;
+    await apiFetch(path, { method:"POST" });
+    toast(action === "approve" ? "Одобрено" : "Отклонено");
+    loadPending();
+  } catch (e){
+    toast("Не удалось выполнить действие");
+    console.error(e);
+  }
+}
+
+async function loadPending(){
+  $("#pendingPlaces").innerHTML = `<div class="muted">Загрузка…</div>`;
+  $("#pendingReviews").innerHTML = `<div class="muted">Загрузка…</div>`;
+  try{
+    const [p, r] = await Promise.all([
+      apiFetch("/moderation/places/pending").catch(()=>[]),
+      apiFetch("/moderation/reviews/pending").catch(()=>[]),
+    ]);
+    const places = normList(p);
+    const reviews = normList(r);
+    $("#pendingPlacesPill").textContent = String(places.length);
+    $("#pendingReviewsPill").textContent = String(reviews.length);
+    renderPending($("#pendingPlaces"), places, "place");
+    renderPending($("#pendingReviews"), reviews, "review");
+  } catch (e){
+    $("#pendingPlaces").innerHTML = `<div class="muted">Нет доступа</div>`;
+    $("#pendingReviews").innerHTML = `<div class="muted">Нет доступа</div>`;
+  }
+}
+
+/* CHAT */
+function renderChat(){
+  const log = $("#chatLog");
+  log.innerHTML = "";
+
+  if (!state.chat.length){
+    log.innerHTML = `<div class="muted">Напишите сообщение — я подскажу идеи.</div>`;
+    return;
+  }
+
+  for (const m of state.chat){
+    const row = document.createElement("div");
+    row.className = "msg " + (m.role === "user" ? "user" : "bot");
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = m.content;
+
+    const meta = document.createElement("div");
+    meta.className = "mmeta";
+    meta.textContent = m.role === "user" ? "Вы" : "Restify";
+
+    const wrap = document.createElement("div");
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+
+    row.appendChild(wrap);
+    log.appendChild(row);
+  }
+
+  log.scrollTop = log.scrollHeight;
+}
+
+function autosize(ta){
+  ta.style.height = "auto";
+  ta.style.height = Math.min(ta.scrollHeight, 140) + "px";
+}
+
+async function onChat(e){
+  e.preventDefault();
+  const ta = $("#chatMsg");
+  const message = ta.value.trim();
+  if (!message) return;
+
+  state.chat.push({ role:"user", content: message });
+  renderChat();
+  ta.value = "";
+  autosize(ta);
+
+  try{
+    const data = await apiFetch("/chat", { method:"POST", body:{ message } });
+    const reply = typeof data === "string" ? data : (data.reply ?? data.message ?? pretty(data));
+    state.chat.push({ role:"bot", content: reply });
+    renderChat();
+  } catch (err){
+    const msg = err.status === 401 ? "Пожалуйста, войдите в аккаунт, чтобы пользоваться чатом." : "Не удалось получить ответ.";
+    state.chat.push({ role:"bot", content: msg });
+    renderChat();
+    toast("Ошибка чата");
+  }
+}
+
+/* INIT */
+function init(){
+  bindModals();
+
+  // theme from storage
+  applyTheme(localStorage.getItem("restify_theme") || "dark");
+
+  // baseUrl (скрыто от UI), токен
+  state.baseUrl = normalizeBaseUrl(localStorage.getItem("restify_baseUrl") || "");
   setToken(localStorage.getItem("restify_token") || "");
 
-  $("#saveBaseUrl").addEventListener("click", () => {
-    setBaseUrl($("#baseUrl").value);
-    toast("Base URL сохранён");
-  });
+  // nav
+  $$(".nav").forEach(b => b.addEventListener("click", () => openTab(b.dataset.tab)));
 
-  $("#clearAuth").addEventListener("click", () => {
+  // top actions
+  $("#goHome").addEventListener("click", () => openTab("dashboard"));
+  $("#themeToggle").addEventListener("click", toggleTheme);
+
+  // user menu
+  $("#userMenuBtn").addEventListener("click", (e) => { e.stopPropagation(); toggleUserMenu(); });
+  document.addEventListener("click", () => closeUserMenu());
+
+  $("#menuLogin").addEventListener("click", () => { closeUserMenu(); openModal("authModal"); switchAuthTab("login"); });
+  $("#menuRegister").addEventListener("click", () => { closeUserMenu(); openModal("authModal"); switchAuthTab("register"); });
+  $("#menuProfile").addEventListener("click", () => { closeUserMenu(); openModal("authModal"); switchAuthTab("profile"); });
+  $("#menuModeration").addEventListener("click", () => { closeUserMenu(); openTab("moderation"); });
+  $("#menuLogout").addEventListener("click", async () => {
+    closeUserMenu();
     setToken("");
-    toast("Токен удалён");
+    state.me = null;
+    await refreshMe();
+    toast("Вы вышли из аккаунта");
+    openTab("dashboard");
   });
 
+  // dashboard ctas
+  $("#ctaPlaces").addEventListener("click", () => openTab("places"));
+  $("#ctaRecs").addEventListener("click", () => openTab("recs"));
+  $("#ctaChat").addEventListener("click", () => openTab("chat"));
+  $("#ctaLogin").addEventListener("click", () => { openModal("authModal"); switchAuthTab("login"); });
+  $("#ctaRegister").addEventListener("click", () => { openModal("authModal"); switchAuthTab("register"); });
+
+  // quick profile
+  $("#openProfileQuick").addEventListener("click", () => { openModal("authModal"); switchAuthTab("profile"); });
+
+  // global search -> places
+  $("#globalSearchBtn").addEventListener("click", () => { $("#f_q").value = $("#globalSearch").value; openTab("places"); });
+  $("#globalSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#globalSearchBtn").click(); } });
+
+  // places
+  $("#applyFilters").addEventListener("click", loadPlaces);
+  $("#resetFilters").addEventListener("click", () => {
+    $("#f_q").value=""; $("#f_city").value=""; $("#f_category").value=""; $("#f_min_rating").value="";
+    loadPlaces();
+  });
+  $("#openCreatePlace").addEventListener("click", () => openModal("createPlaceModal"));
+  $("#createPlaceForm").addEventListener("submit", onCreatePlace);
+
+  // place modal
+  $("#sumBtn").addEventListener("click", onSummary);
+  $("#reviewForm").addEventListener("submit", onReview);
+
+  // recs
+  $("#refreshRecs").addEventListener("click", loadRecs);
+
+  // moderation
+  $("#refreshPending").addEventListener("click", loadPending);
+
+  // chat
+  $("#chatForm").addEventListener("submit", onChat);
+  $("#clearChat").addEventListener("click", () => { state.chat = []; renderChat(); toast("Чат очищен"); });
+  $("#chatMsg").addEventListener("input", (e) => autosize(e.target));
+  $("#chatLoginBtn").addEventListener("click", () => { openModal("authModal"); switchAuthTab("login"); });
+
+  // auth
   $("#registerForm").addEventListener("submit", onRegister);
   $("#loginForm").addEventListener("submit", onLogin);
-  $("#meBtn").addEventListener("click", onMe);
   $("#profileForm").addEventListener("submit", onProfile);
 
-  $("#placesSearchForm").addEventListener("submit", onPlacesSearch);
-  $("#createPlaceForm").addEventListener("submit", onCreatePlace);
-  $("#addReviewForm").addEventListener("submit", onAddReview);
-  $("#summaryForm").addEventListener("submit", onSummary);
-
-  $("#recsBtn").addEventListener("click", onRecs);
-  $("#chatForm").addEventListener("submit", onChat);
-
-  $("#pendingPlacesBtn").addEventListener("click", onPendingPlaces);
-  $("#pendingReviewsBtn").addEventListener("click", onPendingReviews);
-  $("#moderatePlaceForm").addEventListener("submit", onModeratePlace);
-  $("#moderateReviewForm").addEventListener("submit", onModerateReview);
-
-  $("#loadOpenapiBtn").addEventListener("click", loadOpenAPI);
-  $("#filterOpenapi").addEventListener("input", () => {
-    // simple debounce
-    if (state._filterTimer) clearTimeout(state._filterTimer);
-    state._filterTimer = setTimeout(() => {
-      if (state.openapi) loadOpenAPI();
-    }, 250);
+  // initial
+  refreshMe().finally(() => {
+    loadPlaces();
+    renderChat();
+    updateUserMenu();
   });
 }
 
