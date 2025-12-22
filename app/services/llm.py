@@ -92,6 +92,7 @@ class LocalLLM:
             settings.hf_model_id,
             dtype=dtype,
             low_cpu_mem_usage=True,
+            cache_dir="weights"
         )
         model.eval()
         model.to(device)

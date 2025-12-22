@@ -353,6 +353,8 @@ input:focus, textarea:focus{
   background: color-mix(in oklab, var(--panel2) 55%, transparent);
   box-shadow: var(--shadow2);
   white-space: normal;
+  overflow-wrap:anywhere;
+  word-break: break-word;
 }
 .msg.user .bubble{
   background: color-mix(in oklab, var(--accent) 16%, transparent);
@@ -365,7 +367,7 @@ input:focus, textarea:focus{
 .mmeta{font-size:11px;color: var(--muted);margin-top:6px}
 
 /* Chat markdown formatting */
-.bubble .md{line-height:1.45}
+.bubble .md{line-height:1.45; overflow-wrap:anywhere; word-break: break-word}
 .bubble .md br{line-height:1.2}
 .bubble .md ul, .bubble .md ol{margin:8px 0 8px 18px; padding:0}
 .bubble .md li{margin:4px 0}
@@ -382,11 +384,12 @@ input:focus, textarea:focus{
   padding:10px 12px;
   border-radius:14px;
   overflow:auto;
+  max-width:100%;
   border:1px solid color-mix(in oklab, var(--border) 70%, transparent);
   background: color-mix(in oklab, var(--panel) 70%, transparent);
 }
 .bubble .md pre code{padding:0;border:0;background:transparent}
-.bubble .md a{color:var(--accent);text-decoration:underline}
+.bubble .md a{color:var(--accent);text-decoration:underline; overflow-wrap:anywhere; word-break: break-all}
 
 .chatbar{display:flex;gap:10px;align-items:flex-end}
 .chatbar textarea{flex:1;min-height:44px;max-height:140px}
@@ -499,6 +502,7 @@ html[data-theme="light"] .modal{ background: rgba(16,21,36,.30); }
 
 .menu{
   position:absolute;
+  z-index: 220;
   right:0;
   top:calc(100% + 10px);
   width:min(320px, 90vw);

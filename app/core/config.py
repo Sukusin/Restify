@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Local LLM (Hugging Face)
     llm_provider: str = os.getenv("LLM_PROVIDER", "hf_local")  # hf_local | disabled
 
-    hf_model_id: str = os.getenv("HF_MODEL_ID", "Qwen/Qwen2.5-0.5B-Instruct")
+    hf_model_id: str = os.getenv("HF_MODEL_ID", "Qwen/Qwen3-4B-Instruct-2507")
     hf_device: str = os.getenv("HF_DEVICE", "auto")  # auto | cpu | cuda
 
     # Generation params

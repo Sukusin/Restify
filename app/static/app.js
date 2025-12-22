@@ -7,7 +7,18 @@ const state = {
   me: null,
   activePlace: null,
   chat: [],
+
+  // places paging (UI loads portions if backend paginates)
+  placesOffset: 0,
+  placesLimit: 60,
+  placesHasMore: false,
+  placesLoading: false,
+  placesLastParams: null,
+  placesShown: 0,
+  placesTotal: null,
+
   theme: "dark",
+
 };
 
 function pretty(x){ try { return JSON.stringify(x, null, 2); } catch { return String(x); } }
@@ -378,39 +389,128 @@ function qs(params){
 }
 
 /* PLACES */
-async function loadPlaces(){
-  const params = {
+async function loadPlaces(opts = {}){
+  const append = !!opts.append;
+
+  const baseParams = {
     q: $("#f_q").value,
     city: $("#f_city").value,
     category: $("#f_category").value,
     min_rating: $("#f_min_rating").value,
   };
 
-  $("#placesCount").textContent = "Загрузка…";
-  $("#placesGrid").innerHTML = "";
-  $("#placesEmpty").classList.add("hidden");
+  // Detect filter changes (when user hits "Показать" again).
+  const key = JSON.stringify(baseParams);
+  if (!append && state.placesLastParams !== key){
+    state.placesOffset = 0;
+    state.placesShown = 0;
+    state.placesTotal = null;
+    state.placesLastParams = key;
+  }
+
+  const limit = Number(state.placesLimit) || 60;
+  const offset = append ? (Number(state.placesOffset) || 0) : 0;
+
+  const params = {
+    ...baseParams,
+    limit,          // for limit/offset APIs
+    offset,
+    skip: offset,   // for skip/limit APIs
+    page: Math.floor(offset / limit) + 1, // for page/limit APIs
+  };
+
+  if (!append){
+    $("#placesCount").textContent = "Загрузка…";
+    $("#placesGrid").innerHTML = "";
+    $("#placesEmpty").classList.add("hidden");
+  } else {
+    $("#placesCount").textContent = "Загрузка ещё…";
+  }
+
+  // Pager UI (may not exist if HTML not updated yet)
+  const pager = $("#placesPager");
+  const moreBtn = $("#placesMore");
+  const pageInfo = $("#placesPageInfo");
+  if (pager) pager.classList.add("hidden");
+
+  // Prevent double clicks / concurrent fetch
+  if (state.placesLoading) return;
+  state.placesLoading = true;
 
   try{
     const data = await apiFetch(`/places${qs(params)}`);
-    const places = normList(data).map(pickPlace).filter(p => p.id !== null);
+    const batch = normList(data).map(pickPlace).filter(p => p.id !== null);
 
-    $("#placesCount").textContent = places.length ? `Найдено: ${places.length}` : "Ничего не найдено";
-    if (!places.length){
+    // Append or render fresh
+    if (!append){
+      $("#placesGrid").innerHTML = "";
+      state.placesShown = 0;
+    }
+
+    for (const p of batch) $("#placesGrid").appendChild(placeCard(p));
+    state.placesShown += batch.length;
+    state.placesOffset = offset + batch.length;
+
+    // Total / hasMore detection (works with different backend styles)
+    const totalRaw =
+      (data && (data.total ?? data.total_count ?? data.totalItems ?? data.total_items ?? data.count_total)) ?? null;
+    const total = totalRaw !== null && totalRaw !== undefined ? Number(totalRaw) : null;
+    state.placesTotal = Number.isFinite(total) ? total : null;
+
+    let hasMore = false;
+    if (data && typeof data.has_more === "boolean") hasMore = data.has_more;
+    else if (data && data.next) hasMore = true;
+    else if (data && (data.next_offset !== undefined || data.nextOffset !== undefined)) hasMore = true;
+    else if (state.placesTotal !== null) hasMore = state.placesOffset < state.placesTotal;
+    else hasMore = batch.length === limit; // heuristic
+
+    state.placesHasMore = hasMore;
+
+    // Count line
+    if (!state.placesShown){
+      $("#placesCount").textContent = "Ничего не найдено";
       $("#placesEmpty").classList.remove("hidden");
+      if (pager) pager.classList.add("hidden");
       setKPIs([]);
       renderLastPlaces([]);
       return;
     }
 
-    for (const p of places) $("#placesGrid").appendChild(placeCard(p));
-    setKPIs(places);
-    renderLastPlaces(places);
+    if (state.placesTotal !== null){
+      $("#placesCount").textContent = `Показано: ${state.placesShown} из ${state.placesTotal}`;
+    } else {
+      $("#placesCount").textContent = `Показано: ${state.placesShown}` + (hasMore ? " (есть ещё)" : "");
+    }
+
+    // Pager UI
+    if (pager && moreBtn && pageInfo){
+      pageInfo.textContent = state.placesTotal !== null
+        ? `Страница ${Math.floor((state.placesOffset - 1) / limit) + 1}`
+        : `Страница ${Math.floor((state.placesOffset - 1) / limit) + 1}`;
+
+      pager.classList.toggle("hidden", !hasMore);
+      moreBtn.disabled = !hasMore;
+    }
+
+    // KPIs & last places reflect currently loaded subset (OK for demo)
+    const allNow = $$("#placesGrid .place").length;
+    if (!append){
+      // We only set KPIs from the first loaded set, otherwise the numbers jump on "load more"
+      setKPIs(batch);
+      renderLastPlaces(batch);
+    } else {
+      // keep KPI consistent with what user sees; recompute from DOM by storing items not worth it
+      // no-op
+    }
   } catch (e){
     $("#placesCount").textContent = "Не удалось загрузить";
     toast("Не удалось загрузить места");
     console.error(e);
+  } finally {
+    state.placesLoading = false;
   }
 }
+
 
 async function loadRecs(){
   $("#recsGrid").innerHTML = "";
@@ -641,11 +741,15 @@ function init(){
   $("#goHome").addEventListener("click", () => openTab("dashboard"));
   $("#themeToggle").addEventListener("click", toggleTheme);
 
+  // auth modal top tabs
+  $$(".tabbtn").forEach(b => b.addEventListener("click", () => switchAuthTab(b.dataset.atab)));
+
   // user menu
   $("#userMenuBtn").addEventListener("click", (e) => { e.stopPropagation(); toggleUserMenu(); });
-  document.addEventListener("click", () => closeUserMenu());
-
-  $("#menuLogin").addEventListener("click", () => { closeUserMenu(); openModal("authModal"); switchAuthTab("login"); });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".user")) closeUserMenu();
+  });
+$("#menuLogin").addEventListener("click", () => { closeUserMenu(); openModal("authModal"); switchAuthTab("login"); });
   $("#menuRegister").addEventListener("click", () => { closeUserMenu(); openModal("authModal"); switchAuthTab("register"); });
   $("#menuProfile").addEventListener("click", () => { closeUserMenu(); openModal("authModal"); switchAuthTab("profile"); });
   $("#menuLogout").addEventListener("click", async () => {
@@ -672,11 +776,15 @@ function init(){
   $("#globalSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#globalSearchBtn").click(); } });
 
   // places
-  $("#applyFilters").addEventListener("click", loadPlaces);
+  $("#applyFilters").addEventListener("click", () => loadPlaces({ append:false }));
   $("#resetFilters").addEventListener("click", () => {
     $("#f_q").value=""; $("#f_city").value=""; $("#f_category").value=""; $("#f_min_rating").value="";
-    loadPlaces();
+    loadPlaces({ append:false });
   });
+
+  // load more (pagination)
+  const moreBtn = $("#placesMore");
+  if (moreBtn) moreBtn.addEventListener("click", () => loadPlaces({ append:true }));
 
   // place modal
   $("#sumBtn").addEventListener("click", onSummary);
