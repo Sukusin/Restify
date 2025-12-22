@@ -11,12 +11,11 @@ class ReviewCreate(BaseModel):
 
 
 class ReviewResponse(BaseModel):
-    id: str
-    place_id: str
+    id: int
+    place_id: int
     user_id: str
     rating: int
     text: str | None
-    status: str
     created_at: datetime
 
 
@@ -26,5 +25,5 @@ class ReviewListResponse(BaseModel):
 
 
 class ReviewSummaryResponse(BaseModel):
-    place_id: str
+    place_id: int
     summary: str
