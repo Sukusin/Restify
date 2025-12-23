@@ -36,7 +36,7 @@ pip install -r requirements.txt
 Главные:
 - `APP_SECRET_KEY` — секрет для JWT
 - `DATABASE_URL` — строка подключения (по умолчанию `sqlite:///./app.db`)
-- `GEOAPIFY_KEY` — ключ Geoapify (если пустой, используется fallback-ключ в коде импортера)
+- `GEOAPIFY_KEY` — ключ Geoapify (если пустой, импорт мест будет пропущен)
 
 ### 3) Запуск
 
@@ -62,3 +62,32 @@ Swagger/OpenAPI: `http://127.0.0.1:8000/docs`
 - `GET /places/{place_id}/reviews/summary` — суммаризация отзывов (LLM)
 - `GET /recommendations` — рекомендации
 - `POST /chat` — чат
+
+
+## Тесты (pytest)
+
+Установить dev-зависимости:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Запуск:
+
+```bash
+pytest
+```
+
+## Docker + Postgres
+
+Сборка и запуск:
+
+```bash
+docker compose up --build
+```
+
+Откройте:
+- UI: http://127.0.0.1:8000/ui/
+- Docs: http://127.0.0.1:8000/docs
+
+По умолчанию в docker LLM отключена (`LLM_PROVIDER=disabled`) чтобы контейнер не скачивал большие модели.

@@ -23,10 +23,11 @@ router = APIRouter(tags=["chat"])
 def _build_system_prompt(*, profile: UserProfile | None, candidates: list[Place]) -> str:
     cats = parse_categories(profile.preferred_categories) if profile else []
     lines = [
-        "Ты — ассистент для подбора мест отдыха и развлечений.",
+        "Ты - ассистент для подбора мест отдыха и развлечений.",
         "Отвечай по-русски, коротко и по делу.",
         "Можно использовать Markdown (списки, выделение, ссылки). Не используй HTML.",
-        "Если информации недостаточно — задай 1 уточняющий вопрос.",
+        "НЕ выдумывай места: предлагай только те, что перечислены в блоке Кандидаты.",
+        "Если информации недостаточно - задай 1 уточняющий вопрос.",
     ]
 
     if profile:
@@ -39,7 +40,7 @@ def _build_system_prompt(*, profile: UserProfile | None, candidates: list[Place]
         lines.append("\nКандидаты мест (можно предлагать только из списка):")
         for p in candidates:
             lines.append(
-                f"- {p.name} | категория: {p.category} | город: {p.city} | рейтинг: {p.avg_rating:.2f} ({p.reviews_count})"
+                f"- [{p.id}] {p.name} | {p.category} | {p.city} | адрес: {p.address} | рейтинг: {p.avg_rating:.2f} ({p.reviews_count})"
             )
     else:
         lines.append("\nКандидатов нет. Предложи изменить фильтры.")
@@ -66,11 +67,14 @@ async def chat(
     else:
         categories = []
 
+    city = (payload.city or "").strip() or (profile.city if profile and profile.city else None)
     stmt = select(Place)
     if city:
-        stmt = stmt.where(func.lower(Place.city) == city.lower())
+        stmt = stmt.where(Place.city == city.strip())
+
     if categories:
-        stmt = stmt.where(func.lower(Place.category).in_([c.lower() for c in categories]))
+        stmt = stmt.where(Place.category.in_([c.strip() for c in categories]))
+
     if payload.min_rating is not None:
         stmt = stmt.where(Place.avg_rating >= payload.min_rating)
 

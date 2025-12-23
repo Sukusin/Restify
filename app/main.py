@@ -23,6 +23,13 @@ from app.parsers.geoapify_importer import import_places_on_startup
 configure_logging(log_dir=settings.log_dir, level=settings.log_level)
 logger = logging.getLogger(__name__)
 
+class DevStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        resp = await super().get_response(path, scope)
+        # Только для dev: запрет кеша
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Leisure Recommender", version="0.1.0")
@@ -46,7 +53,6 @@ def create_app() -> FastAPI:
         try:
             await import_places_on_startup()
         except Exception:
-            # Do not prevent the app from starting
             logger.exception("Places import failed")
 
     @app.middleware("http")
@@ -68,10 +74,10 @@ def create_app() -> FastAPI:
     app.include_router(recommendations.router)
     app.include_router(chat.router)
 
-    # Serve the provided minimal HTML UI
     static_dir = Path(__file__).resolve().parent / "static"
     if static_dir.exists():
-        app.mount("/ui", StaticFiles(directory=str(static_dir), html=True), name="ui")
+        files_cls = DevStaticFiles if getattr(settings, "debug", False) else StaticFiles
+        app.mount("/ui", files_cls(directory=str(static_dir), html=True), name="ui")
 
         @app.get("/", include_in_schema=False)
         def root_redirect() -> RedirectResponse:

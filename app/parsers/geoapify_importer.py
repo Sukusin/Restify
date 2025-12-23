@@ -164,7 +164,7 @@ async def _fetch_single_city(
 
 
 async def fetch_all_places() -> list[Place]:
-    api_key = (settings.geoapify_key or "").strip() or FALLBACK_API_KEY
+    api_key = (settings.geoapify_key or "").strip()
     if not api_key:
         logger.warning("Geoapify API key not configured; skipping import")
         return []

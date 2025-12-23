@@ -45,14 +45,21 @@ html[data-theme="light"]{
 }
 
 *{box-sizing:border-box}
-html,body{height:100%}
-body{
-  margin:0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+html,html{
+  min-height:100%;
   background:
     radial-gradient(1200px 760px at 20% -10%, color-mix(in oklab, var(--accent) 28%, transparent) 0%, transparent 55%),
     radial-gradient(900px 640px at 80% 0%, color-mix(in oklab, var(--accent2) 16%, transparent) 0%, transparent 60%),
     var(--bg);
+  background-repeat:no-repeat;
+  background-attachment:fixed;
+}
+
+body{min-height:100%}
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: transparent;
   color:var(--text);
 }
 

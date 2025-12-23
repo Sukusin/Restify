@@ -84,13 +84,13 @@ class LocalLLM:
 
         device = cls._pick_device()
 
-        # Dtype: fp16 on CUDA; fp32 on CPU.
+        # Dtype: fp16 on CUDA; fp32 on CPU
         dtype = torch.float16 if device == "cuda" else torch.float32
 
         tokenizer = AutoTokenizer.from_pretrained(settings.hf_model_id, use_fast=True)
         model = AutoModelForCausalLM.from_pretrained(
             settings.hf_model_id,
-            dtype=dtype,
+            torch_dtype=dtype,
             low_cpu_mem_usage=True,
             cache_dir="weights"
         )

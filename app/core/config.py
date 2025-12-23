@@ -15,6 +15,10 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
 
+    # Env
+    env: str = os.getenv("ENV", "dev")  # dev | prod
+    debug: bool = env.lower() == "dev"
+
     # Database
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./app.db")
 
@@ -42,7 +46,7 @@ class Settings(BaseSettings):
 
     # Places parser
     geoapify_url: str = os.getenv("GEOAPIFY_URL", "https://api.geoapify.com/v2/places")
-    geoapify_key: str = os.getenv("GEOAPIFY_KEY", "")
+    geoapify_key: str = os.getenv("GEOAPIFY_KEY", "4cdf4771ad1f49a1b85f1bf4e104eceb")
 
 
 settings = Settings()
