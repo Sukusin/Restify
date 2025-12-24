@@ -11,7 +11,6 @@ from app.db.base import Base
 class Place(Base):
     __tablename__ = "places"
 
-    # Minimal schema (only columns from the UI screenshot)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
@@ -22,7 +21,6 @@ class Place(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
-    # Aggregates (updated when reviews are added)
     avg_rating: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, index=True)
     reviews_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
@@ -30,6 +28,5 @@ class Place(Base):
 
     __table_args__ = (
         Index("ix_places_category_city", "category", "city"),
-        # Prevent duplicates on repeated imports (does not add new columns)
         UniqueConstraint("name", "category", "city", "address", name="uq_places_ncca"),
     )

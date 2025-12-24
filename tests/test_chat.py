@@ -8,7 +8,6 @@ def _register_get_token(client, email="chat@example.com"):
 
 
 def test_chat_grounding_returns_db_candidates(client, db):
-    # Seed several places; order should be by avg_rating desc, then reviews_count desc
     db.add_all(
         [
             Place(name="Cafe A", category="Кафе", city="Москва", address="Addr A", avg_rating=4.9, reviews_count=1),
@@ -30,6 +29,5 @@ def test_chat_grounding_returns_db_candidates(client, db):
     assert "reply" in body
     assert len(body["places"]) == 2
 
-    # Top-2 for Moscow cafes: Cafe A (4.9) then Cafe B (4.5, reviews=10) over Cafe C (4.5, reviews=2)
     names = [p["name"] for p in body["places"]]
     assert names == ["Cafe A", "Cafe B"]

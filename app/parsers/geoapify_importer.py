@@ -169,7 +169,6 @@ async def fetch_all_places() -> list[Place]:
         logger.warning("Geoapify API key not configured; skipping import")
         return []
 
-    # Protect against huge concurrency bursts (Geoapify might throttle aggressively).
     semaphore = asyncio.Semaphore(25)
 
     connector = aiohttp.TCPConnector(limit=50)
@@ -200,7 +199,6 @@ async def fetch_all_places() -> list[Place]:
 
 
 async def import_places_on_startup() -> None:
-    """Import places on application startup if the DB is empty."""
 
     db = SessionLocal()
     try:

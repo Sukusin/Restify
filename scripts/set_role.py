@@ -1,11 +1,5 @@
 from __future__ import annotations
 
-"""Small helper: set user role by email.
-
-Usage:
-  python scripts/set_role.py user@example.com moderator
-"""
-
 import sys
 
 from sqlalchemy import select

@@ -38,7 +38,6 @@ def list_places(
     stmt = select(Place)
 
     if q:
-        # SQLite-safe case-insensitive search
         stmt = stmt.where(func.lower(Place.name).like(f"%{q.lower()}%"))
     if category:
         stmt = stmt.where(Place.category == category.strip())

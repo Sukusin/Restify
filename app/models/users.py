@@ -29,7 +29,6 @@ class UserProfile(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users_auth.id"), primary_key=True)
     display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
-    # Simple: comma-separated categories, e.g. "bar,cinema,park"
     preferred_categories: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     bio: Mapped[str | None] = mapped_column(String(500), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

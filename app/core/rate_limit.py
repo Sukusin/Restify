@@ -16,12 +16,6 @@ class _Bucket:
 
 
 class MemoryRateLimiter:
-    """Very small in-process rate limiter.
-
-    Notes:
-    - Good enough for dev/single-process deployments.
-    - For multi-worker / multi-replica production, use Redis-backed limiter.
-    """
 
     def __init__(self, *, max_keys: int = 20_000) -> None:
         self._max_keys = max_keys
@@ -41,7 +35,6 @@ class MemoryRateLimiter:
             bucket.last_seen = now
             hits = bucket.hits
 
-            # Drop old hits.
             while hits and hits[0] <= window_start:
                 hits.popleft()
 
@@ -51,7 +44,6 @@ class MemoryRateLimiter:
 
             hits.append(now)
 
-            # Very simple cleanup if map grows too large.
             if len(self._buckets) > self._max_keys:
                 self._cleanup(now, ttl_seconds=window_seconds * 10)
 
@@ -82,6 +74,7 @@ def rate_limit(scope: str, *, limit: int, window_seconds: int):
 
     def _dep(request: Request) -> None:
         ip = _client_ip(request)
+        # Keyed by scope and client IP
         key = f"{scope}:{ip}"
         ok, retry_after = _limiter.hit(key, limit=limit, window_seconds=window_seconds)
         if not ok:

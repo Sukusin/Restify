@@ -11,7 +11,6 @@ def configure_logging(*, log_dir: str, level: str = "INFO") -> None:
     root = logging.getLogger()
     root.setLevel(getattr(logging, level.upper(), logging.INFO))
 
-    # Avoid duplicating handlers on reload
     if root.handlers:
         return
 

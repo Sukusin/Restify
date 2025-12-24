@@ -19,7 +19,7 @@ def test_places_filter_city_and_min_rating(client, db):
     r = client.get("/places", params={"city": "Москва", "min_rating": 4.5, "limit": 100, "offset": 0})
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["total"] == 2  # Cafe Alpha + Cinema One
+    assert body["total"] == 2
     names = [x["name"] for x in body["items"]]
     assert "Cafe Alpha" in names
     assert "Cinema One" in names
@@ -29,7 +29,6 @@ def test_places_filter_city_and_min_rating(client, db):
 def test_places_search_and_pagination(client, db):
     _seed_places(db)
 
-    # search "cafe" should match 2 items in Moscow
     r1 = client.get("/places", params={"q": "cafe", "limit": 1, "offset": 0})
     assert r1.status_code == 200, r1.text
     body1 = r1.json()

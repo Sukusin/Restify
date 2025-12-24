@@ -14,19 +14,18 @@ from app.core.logging_config import configure_logging
 from app.db.base import Base
 from app.db.session import engine
 
-import app.models  # noqa: F401 (register models)
+import app.models
 
 from app.routers import auth, users, places, reviews, recommendations, chat
 from app.parsers.geoapify_importer import import_places_on_startup
 
-# Configure logging as early as possible
 configure_logging(log_dir=settings.log_dir, level=settings.log_level)
 logger = logging.getLogger(__name__)
+
 
 class DevStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         resp = await super().get_response(path, scope)
-        # Только для dev: запрет кеша
         resp.headers["Cache-Control"] = "no-store"
         return resp
 
@@ -34,7 +33,6 @@ class DevStaticFiles(StaticFiles):
 def create_app() -> FastAPI:
     app = FastAPI(title="Leisure Recommender", version="0.1.0")
 
-    # CORS is enabled for simple local development scenarios.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -45,11 +43,9 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def on_startup() -> None:
-        # Create tables (minimal replacement for migrations)
         Base.metadata.create_all(bind=engine)
         logger.info("DB ready")
 
-        # Import places automatically (places are not created via API)
         try:
             await import_places_on_startup()
         except Exception:

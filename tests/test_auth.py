@@ -23,7 +23,6 @@ def test_register_duplicate_email_409(client):
 
 
 def test_login_invalid_credentials_401(client):
-    # no such user
     r = client.post("/auth/token", data={"username": "nope@example.com", "password": "password123"})
     assert r.status_code == 401
 
@@ -36,10 +35,8 @@ def test_login_success(client):
 
 
 def test_rate_limit_on_login(client):
-    # Make sure limiter state is clean even if other tests ran
     _reset_for_tests()
 
-    # hit the login endpoint many times (invalid creds are fine)
     for i in range(10):
         r = client.post("/auth/token", data={"username": "x@example.com", "password": "wrongpass"})
         assert r.status_code in (401, 200)

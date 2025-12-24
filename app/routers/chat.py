@@ -56,7 +56,6 @@ async def chat(
 ) -> ChatResponse:
     profile = db.get(UserProfile, current.id)
 
-    # If user didn't provide explicit filters, use profile hints.
     profile_categories = parse_categories(profile.preferred_categories) if profile else []
 
     city = (payload.city or "").strip() or (profile.city if profile and profile.city else None)

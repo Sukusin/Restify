@@ -52,7 +52,6 @@ def create_review(
     db.commit()
     db.refresh(review)
 
-    # Update aggregates on the place
     recompute_place_rating(db, place_id=place_id)
 
     return _to_review_response(review)

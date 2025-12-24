@@ -6,12 +6,10 @@ from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# Load .env early for local development
 load_dotenv()
 
 
 class Settings(BaseSettings):
-    """Application settings."""
 
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True)
 
@@ -46,7 +44,7 @@ class Settings(BaseSettings):
 
     # Places parser
     geoapify_url: str = os.getenv("GEOAPIFY_URL", "https://api.geoapify.com/v2/places")
-    geoapify_key: str = os.getenv("GEOAPIFY_KEY", "4cdf4771ad1f49a1b85f1bf4e104eceb")
+    geoapify_key: str = os.getenv("GEOAPIFY_KEY", "")
 
 
 settings = Settings()

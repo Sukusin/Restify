@@ -33,7 +33,6 @@ class _HFState:
 
 
 class LocalLLM:
-    """Minimal local LLM facade (chat + summarization) using Hugging Face Transformers."""
 
     def __init__(self) -> None:
         self.provider = (settings.llm_provider or "").lower().strip()
@@ -67,7 +66,6 @@ class LocalLLM:
         wanted = (settings.hf_device or "auto").lower().strip()
         if wanted in {"cpu", "cuda"}:
             return wanted
-        # auto
         try:
             import torch
 
@@ -77,7 +75,7 @@ class LocalLLM:
 
     @classmethod
     def _load_sync(cls) -> _HFState:
-        # Heavy imports kept inside to avoid import costs when LLM is disabled.
+        # Heavy imports inside so app starts fast when LLM is disabled
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         import torch
@@ -100,12 +98,10 @@ class LocalLLM:
 
     @staticmethod
     def _build_prompt(tokenizer: object, messages: list[dict]) -> str:
-        # Prefer model-native chat template if available.
         apply = getattr(tokenizer, "apply_chat_template", None)
         if callable(apply):
             return apply(messages, tokenize=False, add_generation_prompt=True)
 
-        # Fallback: very simple chat formatting.
         parts: list[str] = []
         for m in messages:
             role = m.get("role", "user")
