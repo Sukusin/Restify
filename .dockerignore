@@ -1,4 +1,6 @@
+.git
 __pycache__/
+*.pyc
 .venv/
 venv/
 ENV/
@@ -8,7 +10,5 @@ env/
 .env
 .env.*
 logs/
-app.db
 *.db
-sql.txt
 weights/

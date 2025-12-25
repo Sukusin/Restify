@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, get_password_hash, verify_password
+from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.models.users import UserAuth, UserProfile
 from app.schemas.auth import RegisterRequest, TokenResponse
@@ -16,7 +17,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 
 
-@router.post("/register", response_model=TokenResponse, status_code=201)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=201,
+    dependencies=[rate_limit("auth_register", limit=3, window_seconds=60)],
+)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenResponse:
     existing = db.scalar(select(UserAuth).where(UserAuth.email == payload.email))
     if existing:
@@ -33,7 +39,11 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenRe
     return TokenResponse(access_token=token)
 
 
-@router.post("/token", response_model=TokenResponse)
+@router.post(
+    "/token",
+    response_model=TokenResponse,
+    dependencies=[rate_limit("auth_login", limit=10, window_seconds=60)],
+)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> TokenResponse:
     user = db.scalar(select(UserAuth).where(UserAuth.email == form.username))
     if not user or not verify_password(form.password, user.password_hash):

@@ -11,10 +11,6 @@ class _Entry:
 
 
 class TTLCache:
-    """Tiny in-memory TTL cache.
-
-    Not thread-safe, but good enough for a minimal monolith.
-    """
 
     def __init__(self, ttl_seconds: int = 600, max_items: int = 512):
         self.ttl_seconds = ttl_seconds
@@ -33,7 +29,6 @@ class TTLCache:
 
     def set(self, key: str, value: str) -> None:
         now = time.time()
-        # basic eviction: drop an arbitrary item if full
         if len(self._data) >= self.max_items and key not in self._data:
             self._data.pop(next(iter(self._data)), None)
         self._data[key] = _Entry(value=value, expires_at=now + self.ttl_seconds)

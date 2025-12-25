@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: restify
+      POSTGRES_PASSWORD: restify
+      POSTGRES_DB: restify
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U restify -d restify"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      ENV: prod
+      DATABASE_URL: postgresql+psycopg2://restify:restify@db:5432/restify
+      APP_SECRET_KEY: change-me-in-prod
+      LLM_PROVIDER: disabled
+      GEOAPIFY_KEY: ""   # set your key if you want to import places on startup
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

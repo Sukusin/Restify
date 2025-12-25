@@ -33,6 +33,7 @@ class _HFState:
 
 
 class LocalLLM:
+
     def __init__(self) -> None:
         self.provider = (settings.llm_provider or "").lower().strip()
         self._state: _HFState | None = None
@@ -65,7 +66,6 @@ class LocalLLM:
         wanted = (settings.hf_device or "auto").lower().strip()
         if wanted in {"cpu", "cuda"}:
             return wanted
-        # auto
         try:
             import torch
 
@@ -75,73 +75,26 @@ class LocalLLM:
 
     @classmethod
     def _load_sync(cls) -> _HFState:
+        # Heavy imports inside so app starts fast when LLM is disabled
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         import torch
 
         device = cls._pick_device()
 
-        tokenizer = AutoTokenizer.from_pretrained(
+        # Dtype: fp16 on CUDA; fp32 on CPU
+        dtype = torch.float16 if device == "cuda" else torch.float32
+
+        tokenizer = AutoTokenizer.from_pretrained(settings.hf_model_id, use_fast=True)
+        model = AutoModelForCausalLM.from_pretrained(
             settings.hf_model_id,
-            use_fast=True,
-            trust_remote_code=True,
+            torch_dtype=dtype,
+            low_cpu_mem_usage=True,
+            cache_dir="weights"
         )
-        if getattr(tokenizer, "pad_token_id", None) is None:
-            tokenizer.pad_token = tokenizer.eos_token
-
-        use_4bit = bool(device == "cuda" and settings.hf_load_in_4bit)
-        if use_4bit:
-            from transformers import BitsAndBytesConfig
-
-            compute_dtype = (
-                torch.bfloat16
-                if (settings.hf_4bit_compute_dtype or "").lower() == "bfloat16"
-                else torch.float16
-            )
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_quant_type=settings.hf_4bit_quant_type,
-                bnb_4bit_use_double_quant=settings.hf_4bit_double_quant,
-                bnb_4bit_compute_dtype=compute_dtype,
-            )
-
-            model = AutoModelForCausalLM.from_pretrained(
-                settings.hf_model_id,
-                quantization_config=bnb_config,
-                device_map="auto",
-                low_cpu_mem_usage=True,
-                trust_remote_code=True,
-                dtype="auto",
-            )
-        else:
-            # Dtype: fp16 on CUDA; fp32 on CPU.
-            dtype = torch.float16 if device == "cuda" else torch.float32
-
-            model = AutoModelForCausalLM.from_pretrained(
-                settings.hf_model_id,
-                dtype=dtype,
-                low_cpu_mem_usage=True,
-                trust_remote_code=True,
-            )
-            model.to(device)
-
         model.eval()
-
-        model_device = device
-        try:
-            first_param = next(model.parameters())
-            model_device = str(first_param.device)
-        except Exception:
-            model_device = "cuda:0" if device == "cuda" else "cpu"
-
-        try:
-            if getattr(model, "generation_config", None) is not None:
-                if getattr(model.generation_config, "pad_token_id", None) is None:
-                    model.generation_config.pad_token_id = tokenizer.pad_token_id
-        except Exception:
-            pass
-
-        return _HFState(tokenizer=tokenizer, model=model, device=model_device)
+        model.to(device)
+        return _HFState(tokenizer=tokenizer, model=model, device=device)
 
     @staticmethod
     def _build_prompt(tokenizer: object, messages: list[dict]) -> str:
@@ -149,7 +102,6 @@ class LocalLLM:
         if callable(apply):
             return apply(messages, tokenize=False, add_generation_prompt=True)
 
-        # Fallback: very simple chat formatting.
         parts: list[str] = []
         for m in messages:
             role = m.get("role", "user")

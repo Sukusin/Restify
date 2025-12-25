@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, func
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -23,9 +23,11 @@ router = APIRouter(tags=["chat"])
 def _build_system_prompt(*, profile: UserProfile | None, candidates: list[Place]) -> str:
     cats = parse_categories(profile.preferred_categories) if profile else []
     lines = [
-        "Ты — ассистент для подбора мест отдыха и развлечений.",
+        "Ты - ассистент для подбора мест отдыха и развлечений.",
         "Отвечай по-русски, коротко и по делу.",
-        "Если информации недостаточно — задай 1 уточняющий вопрос.",
+        "Можно использовать Markdown (списки, выделение, ссылки). Не используй HTML.",
+        "НЕ выдумывай места: предлагай только те, что перечислены в блоке Кандидаты.",
+        "Если информации недостаточно - задай 1 уточняющий вопрос.",
     ]
 
     if profile:
@@ -38,7 +40,7 @@ def _build_system_prompt(*, profile: UserProfile | None, candidates: list[Place]
         lines.append("\nКандидаты мест (можно предлагать только из списка):")
         for p in candidates:
             lines.append(
-                f"- {p.name} | категория: {p.category} | город: {p.city} | рейтинг: {p.avg_rating:.2f} ({p.reviews_count})"
+                f"- [{p.id}] {p.name} | {p.category} | {p.city} | адрес: {p.address} | рейтинг: {p.avg_rating:.2f} ({p.reviews_count})"
             )
     else:
         lines.append("\nКандидатов нет. Предложи изменить фильтры.")
@@ -54,13 +56,24 @@ async def chat(
 ) -> ChatResponse:
     profile = db.get(UserProfile, current.id)
 
+    profile_categories = parse_categories(profile.preferred_categories) if profile else []
+
+    city = (payload.city or "").strip() or (profile.city if profile and profile.city else None)
+    if payload.category and payload.category.strip():
+        categories = [payload.category.strip()]
+    elif profile_categories:
+        categories = profile_categories
+    else:
+        categories = []
+
+    city = (payload.city or "").strip() or (profile.city if profile and profile.city else None)
     stmt = select(Place)
-    if payload.category:
-        stmt = stmt.where(Place.category == payload.category.strip())
-    if payload.city:
-        stmt = stmt.where(Place.city == payload.city.strip())
-    elif profile and profile.city:
-        stmt = stmt.where(Place.city == profile.city)
+    if city:
+        stmt = stmt.where(Place.city == city.strip())
+
+    if categories:
+        stmt = stmt.where(Place.category.in_([c.strip() for c in categories]))
+
     if payload.min_rating is not None:
         stmt = stmt.where(Place.avg_rating >= payload.min_rating)
 
